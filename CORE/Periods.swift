@@ -1,10 +1,50 @@
 import Foundation
 
+struct Period: Hashable, Identifiable {
+    let displayName: String
+    let eventBlockId: String?
+    let codePrefix: String?
+
+    var id: String {
+        codePrefix ?? "alla"
+    }
+}
+
 enum Periods {
+    static let all = Period(displayName: "Alla terminer", eventBlockId: nil, codePrefix: nil)
+    static let spring2026 = Period(displayName: "Vårterminen 2026", eventBlockId: "18402", codePrefix: "VT26")
+    static let fall2026 = Period(displayName: "Höstterminen 2026", eventBlockId: "19459", codePrefix: "HT26")
+    // TODO: eventBlockId för HT 2025.
+    static let fall2025 = Period(displayName: "HT 2025", eventBlockId: nil, codePrefix: "HT25")
+    static let available = [all, fall2026, spring2026, fall2025]
+
     static let eventBlockIdsByCode: [String: String] = [
         "VT26": "18402",
         "HT26": "19459"
     ]
+
+    static func defaultPeriod(date: Date = Date()) -> Period {
+        let year = Calendar.current.component(.year, from: date) % 100
+        let month = Calendar.current.component(.month, from: date)
+        let term = month < 7 ? "VT" : "HT"
+        let code = String(format: "%@%02d", term, year)
+        return available.first { $0.codePrefix == code } ?? all
+    }
+
+    static func matches(_ booking: Booking, period: Period) -> Bool {
+        guard period != all else { return true }
+
+        let eventBlockId = booking.event?.grouping?.eventBlock?.id?.stringValue
+        if let selectedEventBlockId = period.eventBlockId, eventBlockId == selectedEventBlockId {
+            return true
+        }
+
+        guard let codePrefix = period.codePrefix else { return false }
+        let eventCode = booking.event?.code?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        return eventCode?.hasPrefix(codePrefix.uppercased()) == true
+    }
 
     static func defaultEventBlockId(date: Date = Date()) -> String {
         let year = Calendar.current.component(.year, from: date) % 100

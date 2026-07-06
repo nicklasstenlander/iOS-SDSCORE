@@ -185,7 +185,13 @@ struct MerView: View {
                     }
 
                     NavigationLink {
-                        WebSectionPlaceholderView(section: .forms)
+                        CheckInView()
+                    } label: {
+                        Label("Öppet hus – Incheckning", systemImage: "checkmark.circle")
+                    }
+
+                    NavigationLink {
+                        FormBuilderView()
                     } label: {
                         Label("Formulär", systemImage: WebSection.forms.icon)
                     }

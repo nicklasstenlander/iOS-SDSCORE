@@ -4,23 +4,17 @@ struct AnmalningarView: View {
     @EnvironmentObject var cogWork: CogWorkService
     @State private var searchText = ""
     @State private var paymentFilter = PaymentFilter.all
-    @State private var selectedPeriod = Periods.defaultFullPeriodLabel()
     @State private var selectedBooking: Booking?
 
-    private var periods: [String] {
-        var values = Set(cogWork.bookings.compactMap(\.periodLabel))
-        values.insert(Periods.defaultFullPeriodLabel())
-        return ["Alla terminer"] + values.sorted { $0.localizedStandardCompare($1) == .orderedDescending }
-    }
+    private var periods: [Period] { Periods.available }
 
     private var filteredBookings: [Booking] {
         periodBookings.filter { booking in
-            let matchesPeriod = selectedPeriod == "Alla terminer" || booking.periodLabel == selectedPeriod
             let matchesSearch = searchText.isEmpty
                 || (booking.participant?.name?.localizedCaseInsensitiveContains(searchText) ?? false)
                 || (booking.event?.name?.localizedCaseInsensitiveContains(searchText) ?? false)
             let matchesPayment = paymentFilter.matches(booking)
-            return matchesPeriod && matchesSearch && matchesPayment
+            return matchesSearch && matchesPayment
         }
         .sorted {
             $0.created.localizedStandardCompare($1.created) == .orderedDescending
@@ -28,7 +22,7 @@ struct AnmalningarView: View {
     }
 
     private var periodBookings: [Booking] {
-        cogWork.bookings.filter { selectedPeriod == "Alla terminer" || $0.periodLabel == selectedPeriod }
+        cogWork.periodBookings
     }
 
     private var paidCount: Int { periodBookings.filter(\.isPaid).count }
@@ -36,7 +30,7 @@ struct AnmalningarView: View {
     private var partialCount: Int { periodBookings.filter(\.isPartiallyPaid).count }
 
     private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings)
+        CourseMetricsEngine.countBookingsByParticipant(periodBookings)
     }
 
     var body: some View {
@@ -44,8 +38,8 @@ struct AnmalningarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     filterScroller(periods) { period in
-                        SDSPill(title: period, isSelected: selectedPeriod == period) {
-                            selectedPeriod = period
+                        SDSPill(title: period.displayName, isSelected: cogWork.selectedPeriod == period) {
+                            cogWork.selectedPeriod = period
                         }
                     }
 

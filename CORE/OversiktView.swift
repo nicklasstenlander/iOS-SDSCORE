@@ -5,20 +5,15 @@ struct OversiktView: View {
     @EnvironmentObject var cogWork: CogWorkService
     @EnvironmentObject var goals: GoalsService
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var selectedPeriod = Periods.defaultFullPeriodLabel()
     @State private var expandedCard: OverviewCardID?
     @State private var expandedCourseID: String?
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
 
-    private var periods: [String] {
-        var values = Set(cogWork.bookings.compactMap(\.overviewPeriodLabel))
-        values.insert(Periods.defaultFullPeriodLabel())
-        return ["Alla terminer"] + values.sorted { $0.localizedStandardCompare($1) == .orderedDescending }
-    }
+    private var periods: [Period] { Periods.available }
 
     private var periodBookings: [Booking] {
-        cogWork.bookings.filter { selectedPeriod == "Alla terminer" || $0.overviewPeriodLabel == selectedPeriod }
+        cogWork.periodBookings
     }
 
     var body: some View {
@@ -97,8 +92,8 @@ struct OversiktView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(periods, id: \.self) { period in
-                        SDSPill(title: period, isSelected: selectedPeriod == period) {
-                            selectedPeriod = period
+                        SDSPill(title: period.displayName, isSelected: cogWork.selectedPeriod == period) {
+                            cogWork.selectedPeriod = period
                         }
                     }
                 }
@@ -383,10 +378,7 @@ struct OversiktView: View {
     }
 
     private var periodCode: String {
-        selectedPeriod
-            .replacingOccurrences(of: "Höstterminen ", with: "HT")
-            .replacingOccurrences(of: "Vårterminen ", with: "VT")
-            .replacingOccurrences(of: "Alla terminer", with: "")
+        cogWork.selectedPeriod.codePrefix ?? ""
     }
 
     private var todayLabel: String {
@@ -466,7 +458,7 @@ struct OversiktView: View {
                 detailTitle: "Väntar återkoppling",
                 detailRows: [
                     .init(label: "Ärenden", value: formatted(awaitingCount)),
-                    .init(label: "Period", value: selectedPeriod),
+                    .init(label: "Period", value: cogWork.selectedPeriod.displayName),
                     .init(label: "Status", value: awaitingCount > 0 ? "Behöver åtgärd" : "Klart")
                 ],
                 bookings: sortedBookingsForPanel(periodBookings.filter(\.isAwaitingResponseForOverview))

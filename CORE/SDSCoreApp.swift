@@ -2,7 +2,7 @@ import SwiftUI
 
 @main
 struct SDSCoreApp: App {
-    @StateObject private var auth = SupabaseAuthService()
+    @StateObject private var auth = SupabaseAuthService.shared
     @StateObject private var cogWork = CogWorkService()
     @StateObject private var goals = GoalsService()
 

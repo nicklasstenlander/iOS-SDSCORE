@@ -15,6 +15,7 @@ final class CogWorkService: ObservableObject {
     @Published var isLoadingUsers = false
     @Published var errorMessage: String?
     @Published var lastUpdated: Date?
+    @Published var selectedPeriod = Periods.defaultPeriod()
 
     var cogWorkPassword: String {
         get {
@@ -182,11 +183,15 @@ final class CogWorkService: ObservableObject {
 
     // MARK: - Härledda värden för Översikt
 
-    var totalCount: Int { bookings.count }
+    var periodBookings: [Booking] {
+        bookings.filter { Periods.matches($0, period: selectedPeriod) }
+    }
 
-    var paidCount: Int { bookings.filter { $0.payment?.paid == true }.count }
+    var totalCount: Int { periodBookings.count }
 
-    var unpaidCount: Int { bookings.filter { $0.payment?.paid == false }.count }
+    var paidCount: Int { periodBookings.filter { $0.payment?.paid == true }.count }
+
+    var unpaidCount: Int { periodBookings.filter { $0.payment?.paid == false }.count }
 
     private var hasCogWorkPassword: Bool {
         !cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
