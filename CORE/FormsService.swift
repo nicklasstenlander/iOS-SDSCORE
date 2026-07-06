@@ -11,6 +11,7 @@ final class FormsService: ObservableObject {
     private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1b2trZHR5aG1oa3ZmaXpzbndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjEzMDAsImV4cCI6MjA5ODM5NzMwMH0.n4LdnB4n_J3zqgzo6wLg3oZsdQtZobLoC-VA4X-S9qw"
     private var pollingTask: Task<Void, Never>?
     private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
 
     func fetchForms() async throws -> [FormSummary] {
         try await request(
@@ -33,7 +34,7 @@ final class FormsService: ObservableObject {
     }
 
     func setFormCheckInEnabled(formId: String, enabled: Bool) async throws {
-        let data = try JSONEncoder().encode(["enable_checkin": enabled])
+        let data = try encoder.encode(["enable_checkin": enabled])
         _ = try await requestData(
             path: "/rest/v1/forms",
             queryItems: [URLQueryItem(name: "id", value: "eq.\(formId)")],
@@ -46,12 +47,94 @@ final class FormsService: ObservableObject {
         )
     }
 
-    func fetchOptions(formId: String) async throws -> [FormOption] {
+    func fetchFormFields(formId: String) async throws -> [FormField] {
+        try await request(
+            path: "/rest/v1/form_fields",
+            queryItems: [
+                URLQueryItem(name: "select", value: "*"),
+                URLQueryItem(name: "form_id", value: "eq.\(formId)"),
+                URLQueryItem(name: "order", value: "sort_order.asc")
+            ]
+        )
+    }
+
+    func fetchFormOptions(formId: String) async throws -> [FormOption] {
         try await request(
             path: "/rest/v1/form_options",
             queryItems: [
                 URLQueryItem(name: "select", value: "*"),
-                URLQueryItem(name: "form_id", value: "eq.\(formId)")
+                URLQueryItem(name: "form_id", value: "eq.\(formId)"),
+                URLQueryItem(name: "order", value: "sort_order.asc")
+            ]
+        )
+    }
+
+    func fetchOptions(formId: String) async throws -> [FormOption] {
+        try await fetchFormOptions(formId: formId)
+    }
+
+    func replaceFieldsAndOptions(formId: String, fields: [FormFieldDraft]) async throws {
+        _ = try await requestData(
+            path: "/rest/v1/form_fields",
+            queryItems: [URLQueryItem(name: "form_id", value: "eq.\(formId)")],
+            method: "DELETE",
+            additionalHeaders: ["Prefer": "return=minimal"]
+        )
+
+        guard !fields.isEmpty else { return }
+
+        let fieldPayloads = fields.enumerated().map { index, draft in
+            FormFieldInsert(
+                formId: formId,
+                key: normalizedKey(draft.key, fallback: "field_\(index + 1)"),
+                type: draft.type.rawValue,
+                label: cleaned(draft.label, fallback: "Fält \(index + 1)"),
+                helpText: optionalCleaned(draft.helpText),
+                required: draft.required,
+                sortOrder: index
+            )
+        }
+
+        let insertedFields: [FormField] = try await request(
+            path: "/rest/v1/form_fields",
+            queryItems: [],
+            method: "POST",
+            body: try encoder.encode(fieldPayloads),
+            additionalHeaders: [
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            ]
+        )
+
+        let fieldIdByLocalId = Dictionary(uniqueKeysWithValues: zip(fields.map(\.localId), insertedFields.map(\.id)))
+        let optionPayloads = fields.flatMap { draft -> [FormOptionInsert] in
+            guard let fieldId = fieldIdByLocalId[draft.localId], draft.type.usesOptions else { return [] }
+            return draft.options.enumerated().map { optionIndex, option in
+                FormOptionInsert(
+                    formId: formId,
+                    fieldId: fieldId,
+                    key: normalizedKey(option.key, fallback: "option_\(optionIndex + 1)"),
+                    label: cleaned(option.label, fallback: "Alternativ \(optionIndex + 1)"),
+                    description: optionalCleaned(option.description),
+                    dayTime: draft.type == .courseChoice ? optionalCleaned(option.dayTime) : nil,
+                    location: draft.type == .courseChoice ? optionalCleaned(option.location) : nil,
+                    level: draft.type == .courseChoice ? optionalCleaned(option.level) : nil,
+                    capacity: draft.type == .courseChoice ? Int(option.capacity.trimmingCharacters(in: .whitespacesAndNewlines)) : nil,
+                    active: option.active,
+                    sortOrder: optionIndex
+                )
+            }
+        }
+
+        guard !optionPayloads.isEmpty else { return }
+        _ = try await requestData(
+            path: "/rest/v1/form_options",
+            queryItems: [],
+            method: "POST",
+            body: try encoder.encode(optionPayloads),
+            additionalHeaders: [
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
             ]
         )
     }
@@ -163,7 +246,7 @@ final class FormsService: ObservableObject {
         guard var components = URLComponents(string: supabaseURL + path) else {
             throw URLError(.badURL)
         }
-        components.queryItems = queryItems
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
 
         guard let url = components.url else {
             throw URLError(.badURL)
@@ -189,5 +272,66 @@ final class FormsService: ObservableObject {
         }
 
         return data
+    }
+
+    private func cleaned(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private func optionalCleaned(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func normalizedKey(_ value: String, fallback: String) -> String {
+        let source = value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : value
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        let scalars = source.lowercased().unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(scalar) : "_"
+        }
+        let key = String(scalars)
+            .split(separator: "_")
+            .joined(separator: "_")
+        return key.isEmpty ? fallback : key
+    }
+}
+
+private struct FormFieldInsert: Encodable {
+    let formId: String
+    let key: String
+    let type: String
+    let label: String
+    let helpText: String?
+    let required: Bool
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case key, type, label, required
+        case formId = "form_id"
+        case helpText = "help_text"
+        case sortOrder = "sort_order"
+    }
+}
+
+private struct FormOptionInsert: Encodable {
+    let formId: String
+    let fieldId: String
+    let key: String
+    let label: String
+    let description: String?
+    let dayTime: String?
+    let location: String?
+    let level: String?
+    let capacity: Int?
+    let active: Bool
+    let sortOrder: Int
+
+    enum CodingKeys: String, CodingKey {
+        case key, label, description, location, level, capacity, active
+        case formId = "form_id"
+        case fieldId = "field_id"
+        case dayTime = "day_time"
+        case sortOrder = "sort_order"
     }
 }
