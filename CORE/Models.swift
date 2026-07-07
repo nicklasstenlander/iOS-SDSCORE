@@ -60,6 +60,7 @@ struct Booking: Codable, Identifiable {
         let firstName: String?
         let lastName: String?
         let dateOfBirth: String?
+        let telephoneNumbers: [UserTelephoneNumber]?
     }
 
     struct Payment: Codable {
@@ -221,11 +222,20 @@ enum FlexibleValue: Codable, Hashable {
 struct AllDataResponse: Codable {
     let bookings: BookingsWrapper
     let events: EventsWrapper?
+    let duplicates: BookingsWrapper?
     let cachedAt: String?
 
     struct BookingsWrapper: Codable {
         let bookings: [Booking]
         let search: SearchInfo?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            bookings = (try? container.decodeIfPresent([Booking].self, forKey: .bookings)) ?? []
+            search = try? container.decodeIfPresent(SearchInfo.self, forKey: .search)
+        }
+
+        enum CodingKeys: String, CodingKey { case bookings, search }
     }
 
     struct EventsWrapper: Codable {
@@ -469,15 +479,37 @@ struct UserProfile: Codable {
     let id: String
     let fullName: String
     let role: String
+    let telavoxAgent: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case fullName = "full_name"
         case role
+        case telavoxAgent = "telavox_agent"
     }
 
     var firstName: String {
         fullName.split(separator: " ").first.map(String.init) ?? fullName
+    }
+}
+
+// MARK: - Booking status helpers
+
+extension Booking {
+    var isAcceptedForOverview: Bool {
+        let code = status?.code?.uppercased() ?? ""
+        let name = status?.name?.lowercased() ?? ""
+        return code == "ACCEPTED" || name.contains("accepterad") || name.contains("antagen")
+    }
+
+    var isAwaitingResponseForOverview: Bool {
+        let code = status?.code?.uppercased() ?? ""
+        let name = status?.name?.lowercased() ?? ""
+        return code == "AWAITING_RESPONSE" || code == "WAITING" || name.contains("väntar")
+    }
+
+    var isPendingReviewForOverview: Bool {
+        status?.code?.uppercased() == "NEW"
     }
 }
 
@@ -524,5 +556,12 @@ extension KeyedDecodingContainer {
             if ["false", "no", "nej", "0"].contains(normalized) { return false }
         }
         return nil
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

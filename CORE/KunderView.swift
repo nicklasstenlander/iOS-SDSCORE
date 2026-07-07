@@ -83,7 +83,7 @@ struct KunderView: View {
 
     private var header: some View {
         Text("Sök kontaktkort, deltagare och kundhistorik från CogWork.")
-            .font(SDSType.rounded(14))
+            .font(SDSType.agrandir(14))
             .foregroundColor(.sdsSecondaryText)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -94,7 +94,7 @@ struct KunderView: View {
                 .foregroundColor(.sdsDarkModeGreen)
 
             TextField("Sök kund...", text: $query)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
@@ -115,7 +115,7 @@ struct KunderView: View {
                     Task { await search() }
                 } label: {
                     Text("Sök")
-                        .font(SDSType.rounded(13, weight: .bold))
+                        .font(SDSType.agrandir(13, weight: .bold))
                         .foregroundColor(.sdsDarkModeGreen)
                 }
                 .disabled(!canSearch || cogWork.isLoadingUsers)
@@ -135,13 +135,13 @@ struct KunderView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("\(cogWork.users.count) kunder")
-                    .font(SDSType.rounded(14, weight: .bold))
+                    .font(SDSType.agrandir(14, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
 
                 Spacer()
 
                 Text("CogWork")
-                    .font(SDSType.rounded(12, weight: .bold))
+                    .font(SDSType.agrandir(12, weight: .bold))
                     .foregroundColor(.sdsDarkModeGreen)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -196,14 +196,14 @@ private struct CustomerRow: View {
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(initials)
-                        .font(SDSType.rounded(13, weight: .bold))
+                        .font(SDSType.agrandir(13, weight: .bold))
                         .foregroundColor(.sdsDarkGreen)
                 )
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(user.displayName)
-                        .font(SDSType.rounded(15, weight: .bold))
+                        .font(SDSType.agrandir(15, weight: .bold))
                         .foregroundColor(.sdsPrimaryText)
                         .lineLimit(1)
 
@@ -213,7 +213,7 @@ private struct CustomerRow: View {
                 }
 
                 Text(user.primaryContact)
-                    .font(SDSType.rounded(13))
+                    .font(SDSType.agrandir(13))
                     .foregroundColor(.sdsSecondaryText)
                     .lineLimit(1)
             }
@@ -238,7 +238,7 @@ private struct CustomerRow: View {
     }
 }
 
-private struct CustomerDetailSheet: View {
+struct CustomerDetailSheet: View {
     let user: CogWorkUser
     @EnvironmentObject var cogWork: CogWorkService
     @Environment(\.dismiss) private var dismiss
@@ -261,7 +261,7 @@ private struct CustomerDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Stäng") { dismiss() }
-                        .font(SDSType.rounded(15, weight: .bold))
+                        .font(SDSType.agrandir(15, weight: .bold))
                 }
             }
             .task(id: user.id) {
@@ -274,11 +274,11 @@ private struct CustomerDetailSheet: View {
     private var detailHeader: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("DELTAGARE")
-                .font(SDSType.rounded(12, weight: .bold))
+                .font(SDSType.agrandir(12, weight: .bold))
                 .foregroundColor(.sdsDarkModeGreen)
 
             Text(user.displayName)
-                .font(SDSType.rounded(26, weight: .bold))
+                .font(SDSType.agrandir(26, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -341,17 +341,17 @@ private struct CustomerDetailSheet: View {
                 Image(systemName: "book.closed")
                     .foregroundColor(.sdsDarkModeGreen)
                 Text("KURSER")
-                    .font(SDSType.rounded(12, weight: .bold))
+                    .font(SDSType.agrandir(12, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
             }
 
             if cogWork.isLoading {
                 ProgressView("Hämtar kurser...")
-                    .font(SDSType.rounded(14, weight: .bold))
+                    .font(SDSType.agrandir(14, weight: .bold))
                     .frame(maxWidth: .infinity, minHeight: 84)
             } else if cogWork.selectedUserBookings.isEmpty {
                 Text("Inga bokningar hämtade.")
-                    .font(SDSType.rounded(14))
+                    .font(SDSType.agrandir(14))
                     .foregroundColor(.sdsSecondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
@@ -395,10 +395,10 @@ private struct DetailLine: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(label)
-                    .font(SDSType.rounded(12, weight: .bold))
+                    .font(SDSType.agrandir(12, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
                 Text(value)
-                    .font(SDSType.rounded(14))
+                    .font(SDSType.agrandir(14))
                     .foregroundColor(.sdsPrimaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -407,7 +407,7 @@ private struct DetailLine: View {
 
             if let actionTitle, let actionURL {
                 Link(actionTitle, destination: actionURL)
-                    .font(SDSType.rounded(13, weight: .bold))
+                    .font(SDSType.agrandir(13, weight: .bold))
                     .foregroundColor(.sdsDarkModeGreen)
             }
         }
@@ -421,12 +421,12 @@ private struct CustomerCourseRow: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(booking.event?.name ?? "Okänd kurs")
-                    .font(SDSType.rounded(15, weight: .bold))
+                    .font(SDSType.agrandir(15, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(BookingStatusFormatter.format(code: booking.status?.code, fallback: booking.status?.name))
-                    .font(SDSType.rounded(13))
+                    .font(SDSType.agrandir(13))
                     .foregroundColor(.sdsSecondaryText)
             }
 
@@ -456,7 +456,7 @@ private struct MissingCogWorkPasswordCard: View {
 
             Button(action: action) {
                 Label("Öppna CogWork API", systemImage: "key")
-                    .font(SDSType.rounded(15, weight: .bold))
+                    .font(SDSType.agrandir(15, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Color.sdsMidGreen)
@@ -475,7 +475,7 @@ private struct LoadingCard: View {
             ProgressView()
                 .tint(.sdsDarkModeGreen)
             Text(message)
-                .font(SDSType.rounded(15, weight: .bold))
+                .font(SDSType.agrandir(15, weight: .bold))
                 .foregroundColor(.sdsSecondaryText)
         }
         .frame(maxWidth: .infinity, minHeight: 180)
@@ -504,11 +504,11 @@ private struct EmptyStateCard: View {
                 .clipShape(Circle())
 
             Text(title)
-                .font(SDSType.rounded(17, weight: .bold))
+                .font(SDSType.agrandir(17, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
             Text(message)
-                .font(SDSType.rounded(14))
+                .font(SDSType.agrandir(14))
                 .foregroundColor(.sdsSecondaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -562,12 +562,5 @@ private extension UserAddress {
             return value
         }
         .joined(separator: "\n")
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }

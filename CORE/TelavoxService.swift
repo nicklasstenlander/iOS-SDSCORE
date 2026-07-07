@@ -1,7 +1,8 @@
 import Foundation
+import Combine
 
-struct TelavoxCall: Codable, Identifiable {
-    enum Direction: String, Codable, CaseIterable {
+struct TelavoxCall: Decodable, Identifiable {
+    enum Direction: String, Decodable, CaseIterable {
         case incoming
         case outgoing
         case missed
@@ -89,7 +90,7 @@ struct TelavoxCall: Codable, Identifiable {
     }()
 }
 
-struct TelavoxCallsResponse: Codable {
+struct TelavoxCallsResponse: Decodable {
     let incoming: [TelavoxCall]
     let outgoing: [TelavoxCall]
     let missed: [TelavoxCall]
@@ -243,7 +244,7 @@ final class TelavoxService: ObservableObject {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        if data.isEmpty {
+        if T.self == EmptyTelavoxResponse.self || data.isEmpty {
             return EmptyTelavoxResponse() as! T
         }
         return try JSONDecoder().decode(T.self, from: data)

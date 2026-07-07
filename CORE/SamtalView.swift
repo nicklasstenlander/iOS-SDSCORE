@@ -5,10 +5,16 @@ struct SamtalView: View {
     @EnvironmentObject private var auth: SupabaseAuthService
     @StateObject private var telavox = TelavoxService()
 
+    private let loadsOnAppear: Bool
+
     @State private var selectedDate = Date()
     @State private var smsDraft: SMSDraft?
     @State private var pendingDial: TelavoxCall?
     @State private var dialStatus: String?
+
+    init(loadsOnAppear: Bool = true) {
+        self.loadsOnAppear = loadsOnAppear
+    }
 
     private var participantLookup: [String: ParticipantCallInfo] {
         SDSPhoneNumbers.participantLookup(for: cogWork.bookings)
@@ -42,7 +48,7 @@ struct SamtalView: View {
                 await telavox.loadCalls(on: selectedDate)
             }
             .task {
-                if telavox.calls.isEmpty {
+                if loadsOnAppear && telavox.calls.isEmpty {
                     await telavox.loadCalls(on: selectedDate)
                 }
             }
@@ -80,7 +86,7 @@ struct SamtalView: View {
     private var dateControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Samtal")
+                Text("Lista över samtal")
                     .font(SDSType.agrandir(28, weight: .bold))
                     .foregroundColor(.sdsDarkModeGreen)
 
@@ -111,7 +117,7 @@ struct SamtalView: View {
     }
 
     private var callsContent: some View {
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
             CallSectionView(
                 title: "Missade",
                 icon: "phone.down",
@@ -145,6 +151,7 @@ struct SamtalView: View {
                 onSMS: openSMS
             )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var loadingRows: some View {
@@ -199,6 +206,12 @@ struct SamtalView: View {
     }
 }
 
+#Preview {
+    SamtalView(loadsOnAppear: false)
+        .environmentObject(CogWorkService())
+        .environmentObject(SupabaseAuthService.shared)
+}
+
 private struct CallSectionView: View {
     let title: String
     let icon: String
@@ -231,7 +244,7 @@ private struct CallSectionView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             } else {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(calls) { call in
                         CallRowView(
                             call: call,
@@ -244,8 +257,10 @@ private struct CallSectionView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.sdsSurface)
         .overlay(
             RoundedRectangle(cornerRadius: 14)

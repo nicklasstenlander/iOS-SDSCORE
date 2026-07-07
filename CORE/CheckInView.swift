@@ -157,15 +157,15 @@ struct CheckInView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ÖPPET HUS")
-                .font(SDSType.rounded(12, weight: .bold))
+                .font(SDSType.agrandir(12, weight: .bold))
                 .foregroundColor(.sdsDarkModeGreen)
 
             Text(enableCheckIn ? "Svar med incheckning" : "Formulärsvar")
-                .font(SDSType.rounded(isWideLayout ? 38 : 30, weight: .bold))
+                .font(SDSType.agrandir(isWideLayout ? 38 : 30, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
             Text(enableCheckIn ? "\(checkedInCount) incheckade av \(formsService.submissions.count) svar" : "\(formsService.submissions.count) svar")
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .foregroundColor(.sdsSecondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,7 +183,7 @@ struct CheckInView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .font(SDSType.rounded(15, weight: .bold))
+                .font(SDSType.agrandir(15, weight: .bold))
                 .tint(.sdsDarkModeGreen)
             }
 
@@ -208,7 +208,7 @@ struct CheckInView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.sdsDarkModeGreen)
             TextField("Sök namn, e-post eller telefon...", text: $searchText)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -239,13 +239,13 @@ struct CheckInView: View {
                 ProgressView()
                     .tint(.sdsDarkModeGreen)
                 Text("Laddar formulärsvar...")
-                    .font(SDSType.rounded(14, weight: .bold))
+                    .font(SDSType.agrandir(14, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if let error = loadError ?? formsService.errorMessage {
             Text(error)
-                .font(SDSType.rounded(13, weight: .bold))
+                .font(SDSType.agrandir(13, weight: .bold))
                 .foregroundColor(.sdsPink)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,7 +260,7 @@ struct CheckInView: View {
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundColor(.sdsDarkModeGreen)
             Text(forms.isEmpty ? "Inga publicerade formulär hittades" : "Inga svar matchar urvalet")
-                .font(SDSType.rounded(15, weight: .bold))
+                .font(SDSType.agrandir(15, weight: .bold))
                 .foregroundColor(.sdsSecondaryText)
         }
         .frame(maxWidth: .infinity, minHeight: 180)
@@ -406,7 +406,7 @@ private struct CheckInSubmissionRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Text(name)
-                        .font(SDSType.rounded(isWide ? 20 : 17, weight: .bold))
+                        .font(SDSType.agrandir(isWide ? 20 : 17, weight: .bold))
                         .foregroundColor(.sdsPrimaryText)
                         .lineLimit(2)
 
@@ -416,19 +416,19 @@ private struct CheckInSubmissionRow: View {
                 }
 
                 Text(contact)
-                    .font(SDSType.rounded(14))
+                    .font(SDSType.agrandir(14))
                     .foregroundColor(.sdsSecondaryText)
                     .lineLimit(2)
 
                 if !courseLabels.isEmpty {
                     Text(courseLabels.joined(separator: " · "))
-                        .font(SDSType.rounded(14, weight: .bold))
+                        .font(SDSType.agrandir(14, weight: .bold))
                         .foregroundColor(.sdsDarkModeGreen)
                         .lineLimit(isWide ? 3 : 2)
                 }
 
                 Text(answerSummary)
-                    .font(SDSType.rounded(12))
+                    .font(SDSType.agrandir(12))
                     .foregroundColor(.sdsTertiaryText)
                     .lineLimit(isWide ? 3 : 2)
             }

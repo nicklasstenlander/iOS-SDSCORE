@@ -11,12 +11,8 @@ struct FormBuilderView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Formulär")
-                        .font(SDSType.rounded(28, weight: .bold))
-                        .foregroundColor(.sdsPrimaryText)
-
                     Text("Välj vilka formulär som ska använda incheckning och redigera deras fält och svarsalternativ.")
-                        .font(SDSType.rounded(14))
+                        .font(SDSType.agrandir(14))
                         .foregroundColor(.sdsSecondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -27,10 +23,24 @@ struct FormBuilderView: View {
             if let errorMessage {
                 Section {
                     Text(errorMessage)
-                        .font(SDSType.rounded(13, weight: .bold))
+                        .font(SDSType.agrandir(13, weight: .bold))
                         .foregroundColor(.sdsPink)
                 }
                 .listRowBackground(Color.sdsPinkAdaptiveSurface)
+            }
+
+            Section {
+                NavigationLink {
+                    FormBuilderEditorView(
+                        form: nil,
+                        onSaved: { createdForm in upsertForm(createdForm) },
+                        onDeleted: { _ in }
+                    )
+                } label: {
+                    Label("Skapa nytt formulär", systemImage: "plus.circle.fill")
+                        .font(SDSType.agrandir(16, weight: .bold))
+                        .foregroundColor(.sdsDarkModeGreen)
+                }
             }
 
             Section("Inställningar") {
@@ -39,13 +49,13 @@ struct FormBuilderView: View {
                         ProgressView()
                             .tint(.sdsDarkModeGreen)
                         Text("Laddar formulär...")
-                            .font(SDSType.rounded(14, weight: .bold))
+                            .font(SDSType.agrandir(14, weight: .bold))
                             .foregroundColor(.sdsSecondaryText)
                     }
                     .padding(.vertical, 8)
                 } else if forms.isEmpty {
                     Text("Inga formulär hittades")
-                        .font(SDSType.rounded(14, weight: .bold))
+                        .font(SDSType.agrandir(14, weight: .bold))
                         .foregroundColor(.sdsSecondaryText)
                         .padding(.vertical, 8)
                 } else {
@@ -59,12 +69,14 @@ struct FormBuilderView: View {
                             }
 
                             NavigationLink {
-                                FormBuilderEditorView(form: form) { updatedForm in
-                                    updateForm(updatedForm)
-                                }
+                                FormBuilderEditorView(
+                                    form: form,
+                                    onSaved: { updatedForm in upsertForm(updatedForm) },
+                                    onDeleted: { deletedFormID in removeForm(id: deletedFormID) }
+                                )
                             } label: {
                                 Label("Redigera fält och alternativ", systemImage: "slider.horizontal.3")
-                                    .font(SDSType.rounded(14, weight: .bold))
+                                    .font(SDSType.agrandir(14, weight: .bold))
                                     .foregroundColor(.sdsDarkModeGreen)
                             }
                         }
@@ -73,7 +85,7 @@ struct FormBuilderView: View {
                 }
             }
         }
-        .font(SDSType.rounded(15))
+        .font(SDSType.agrandir(15))
         .navigationTitle("Formulär")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -131,138 +143,62 @@ struct FormBuilderView: View {
         }
     }
 
-    private func updateForm(_ form: FormSummary) {
-        guard let index = forms.firstIndex(where: { $0.id == form.id }) else { return }
-        forms[index] = form
+    private func upsertForm(_ form: FormSummary) {
+        if let index = forms.firstIndex(where: { $0.id == form.id }) {
+            forms[index] = form
+        } else {
+            forms.append(form)
+            forms.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
+    }
+
+    private func removeForm(id: String) {
+        forms.removeAll { $0.id == id }
     }
 }
 
 private struct FormBuilderEditorView: View {
-    let form: FormSummary
+    let form: FormSummary?
     let onSaved: (FormSummary) -> Void
+    let onDeleted: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var formsService = FormsService()
+    @State private var title: String
+    @State private var slug: String
+    @State private var status: String
     @State private var enableCheckin: Bool
     @State private var fields: [FormFieldDraft] = []
     @State private var expandedFieldIDs: Set<UUID> = []
     @State private var fieldPendingDeletion: FormFieldDraft?
     @State private var isLoading = true
     @State private var isSaving = false
+    @State private var isDeleting = false
+    @State private var showsDeleteConfirmation = false
     @State private var errorMessage: String?
 
-    init(form: FormSummary, onSaved: @escaping (FormSummary) -> Void) {
+    init(form: FormSummary?, onSaved: @escaping (FormSummary) -> Void, onDeleted: @escaping (String) -> Void) {
         self.form = form
         self.onSaved = onSaved
-        _enableCheckin = State(initialValue: form.enableCheckin)
+        self.onDeleted = onDeleted
+        _title = State(initialValue: form?.title ?? "")
+        _slug = State(initialValue: form?.slug ?? "")
+        _status = State(initialValue: form?.status ?? "draft")
+        _enableCheckin = State(initialValue: form?.enableCheckin ?? false)
+        _isLoading = State(initialValue: form != nil)
     }
 
     var body: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(form.title)
-                        .font(SDSType.rounded(26, weight: .bold))
-                        .foregroundColor(.sdsPrimaryText)
-
-                    Text(statusText(for: form.status))
-                        .font(SDSType.rounded(12, weight: .bold))
-                        .foregroundColor(.sdsSecondaryText)
-                }
-                .padding(.vertical, 4)
-            }
-            .listRowBackground(Color.clear)
-
-            if let errorMessage {
-                Section {
-                    Text(errorMessage)
-                        .font(SDSType.rounded(13, weight: .bold))
-                        .foregroundColor(.sdsPink)
-                }
-                .listRowBackground(Color.sdsPinkAdaptiveSurface)
-            }
-
-            Section("Inställningar") {
-                Toggle("Aktivera incheckning för detta formulär", isOn: $enableCheckin)
-                    .font(SDSType.rounded(14, weight: .bold))
-                    .tint(.sdsDarkGreen)
-                    .disabled(isSaving)
-            }
-
-            Section {
-                if isLoading {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .tint(.sdsDarkModeGreen)
-                        Text("Laddar fält...")
-                            .font(SDSType.rounded(14, weight: .bold))
-                            .foregroundColor(.sdsSecondaryText)
-                    }
-                    .padding(.vertical, 8)
-                } else if fields.isEmpty {
-                    Text("Inga fält ännu")
-                        .font(SDSType.rounded(14, weight: .bold))
-                        .foregroundColor(.sdsSecondaryText)
-                        .padding(.vertical, 8)
-                } else {
-                    ForEach(fields) { field in
-                        FormFieldEditorRow(
-                            field: binding(for: field.localId),
-                            isExpanded: Binding(
-                                get: { expandedFieldIDs.contains(field.localId) },
-                                set: { expanded in
-                                    if expanded {
-                                        expandedFieldIDs.insert(field.localId)
-                                    } else {
-                                        expandedFieldIDs.remove(field.localId)
-                                    }
-                                }
-                            ),
-                            canMoveUp: fields.first?.localId != field.localId,
-                            canMoveDown: fields.last?.localId != field.localId,
-                            moveUp: { moveField(field.localId, direction: -1) },
-                            moveDown: { moveField(field.localId, direction: 1) },
-                            requestDelete: { fieldPendingDeletion = field }
-                        )
-                    }
-                }
-            } header: {
-                HStack {
-                    Text("Fält")
-                    Spacer()
-                    Button {
-                        addField()
-                    } label: {
-                        Label("Lägg till fält", systemImage: "plus")
-                    }
-                    .font(SDSType.rounded(12, weight: .bold))
-                }
-            }
-
-            Section {
-                Button {
-                    Task { await save() }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if isSaving {
-                            ProgressView()
-                                .tint(.sdsDarkGreen)
-                        } else {
-                            Text("Spara")
-                                .font(SDSType.rounded(17, weight: .bold))
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 10)
-                }
-                .disabled(isLoading || isSaving)
-                .listRowBackground(Color.sdsMidGreen)
-                .foregroundColor(.sdsDarkGreen)
-            }
+            headerSection
+            errorSection
+            settingsSection
+            fieldsSection
+            saveSection
+            deleteSection
         }
-        .font(SDSType.rounded(15))
-        .navigationTitle("Bygg formulär")
+        .font(SDSType.agrandir(15))
+        .navigationTitle(form == nil ? "Nytt formulär" : "Bygg formulär")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadFields()
@@ -287,11 +223,190 @@ private struct FormBuilderEditorView: View {
         } message: {
             Text("Fältet tas bort permanent nästa gång du sparar formuläret.")
         }
+        .confirmationDialog(
+            "Radera formulär?",
+            isPresented: $showsDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Ja, radera formuläret permanent", role: .destructive) {
+                Task { await deleteForm() }
+            }
+            Button("Avbryt", role: .cancel) { }
+        } message: {
+            Text("Detta går inte att ångra. Formuläret och dess fält tas bort permanent.")
+        }
         .scrollContentBackground(.hidden)
         .background(Color.sdsPageBackground)
     }
 
+    private var headerSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (form?.title ?? "Nytt formulär") : title)
+                    .font(SDSType.agrandir(26, weight: .bold))
+                    .foregroundColor(.sdsPrimaryText)
+
+                Text(statusText(for: status))
+                    .font(SDSType.agrandir(12, weight: .bold))
+                    .foregroundColor(.sdsSecondaryText)
+            }
+            .padding(.vertical, 4)
+        }
+        .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private var errorSection: some View {
+        if let errorMessage {
+            Section {
+                Text(errorMessage)
+                    .font(SDSType.agrandir(13, weight: .bold))
+                    .foregroundColor(.sdsPink)
+            }
+            .listRowBackground(Color.sdsPinkAdaptiveSurface)
+        }
+    }
+
+    private var settingsSection: some View {
+        Section("Inställningar") {
+            TextField("Titel", text: $title)
+                .font(SDSType.agrandir(15))
+
+            TextField("Slug", text: $slug)
+                .font(SDSType.agrandir(15))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            Picker("Status", selection: $status) {
+                Text("Utkast").tag("draft")
+                Text("Publicerat").tag("published")
+                Text("Stängt").tag("closed")
+            }
+            .pickerStyle(.menu)
+            .tint(.sdsDarkModeGreen)
+
+            Toggle("Aktivera incheckning för detta formulär", isOn: $enableCheckin)
+                .font(SDSType.agrandir(14, weight: .bold))
+                .tint(.sdsDarkGreen)
+                .disabled(isSaving)
+        }
+    }
+
+    private var fieldsSection: some View {
+        Section {
+            fieldsContent
+        } header: {
+            HStack {
+                Text("Fält")
+                Spacer()
+                Button {
+                    addField()
+                } label: {
+                    Label("Lägg till fält", systemImage: "plus")
+                }
+                .font(SDSType.agrandir(12, weight: .bold))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var fieldsContent: some View {
+        if isLoading {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(.sdsDarkModeGreen)
+                Text("Laddar fält...")
+                    .font(SDSType.agrandir(14, weight: .bold))
+                    .foregroundColor(.sdsSecondaryText)
+            }
+            .padding(.vertical, 8)
+        } else if fields.isEmpty {
+            Text("Inga fält ännu")
+                .font(SDSType.agrandir(14, weight: .bold))
+                .foregroundColor(.sdsSecondaryText)
+                .padding(.vertical, 8)
+        } else {
+            ForEach(fields) { field in
+                FormFieldEditorRow(
+                    field: binding(for: field.localId),
+                    isExpanded: Binding(
+                        get: { expandedFieldIDs.contains(field.localId) },
+                        set: { expanded in
+                            if expanded {
+                                expandedFieldIDs.insert(field.localId)
+                            } else {
+                                expandedFieldIDs.remove(field.localId)
+                            }
+                        }
+                    ),
+                    canMoveUp: fields.first?.localId != field.localId,
+                    canMoveDown: fields.last?.localId != field.localId,
+                    moveUp: { moveField(field.localId, direction: -1) },
+                    moveDown: { moveField(field.localId, direction: 1) },
+                    requestDelete: { fieldPendingDeletion = field }
+                )
+            }
+        }
+    }
+
+    private var saveSection: some View {
+        Section {
+            Button {
+                Task { await save() }
+            } label: {
+                HStack {
+                    Spacer()
+                    if isSaving {
+                        ProgressView()
+                            .tint(.sdsDarkGreen)
+                    } else {
+                        Text("Spara")
+                            .font(SDSType.agrandir(17, weight: .bold))
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+            }
+            .disabled(isLoading || isSaving || isDeleting)
+            .listRowBackground(Color.sdsMidGreen)
+            .foregroundColor(.sdsDarkGreen)
+        }
+    }
+
+    @ViewBuilder
+    private var deleteSection: some View {
+        if form != nil {
+            Section {
+                Button(role: .destructive) {
+                    showsDeleteConfirmation = true
+                } label: {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text(isDeleting ? "Raderar formulär..." : "Radera formulär")
+                            .font(SDSType.agrandir(15, weight: .bold))
+                        Spacer()
+                        if isDeleting {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isSaving || isDeleting)
+            } header: {
+                Text("Farlig åtgärd")
+            } footer: {
+                Text("Radering tar bort formuläret permanent. Använd bara detta när du är säker.")
+            }
+        }
+    }
+
     private func loadFields() async {
+        guard let form else {
+            isLoading = false
+            fields = []
+            expandedFieldIDs = []
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
 
@@ -311,15 +426,50 @@ private struct FormBuilderEditorView: View {
         defer { isSaving = false }
 
         do {
-            try await formsService.setFormCheckInEnabled(formId: form.id, enabled: enableCheckin)
-            try await formsService.replaceFieldsAndOptions(formId: form.id, fields: normalizedFields())
-            var updatedForm = form
-            updatedForm.enableCheckin = enableCheckin
-            onSaved(updatedForm)
+            let cleanedTitle = cleaned(title, fallback: form?.title ?? "Nytt formulär")
+            let cleanedSlug = optionalCleaned(slug) ?? key(for: "", label: cleanedTitle, fallback: "nytt_formular")
+            let savedForm: FormSummary
+
+            if let form {
+                let updatedForm = FormSummary(
+                    id: form.id,
+                    title: cleanedTitle,
+                    slug: cleanedSlug,
+                    status: status,
+                    enableCheckin: enableCheckin
+                )
+                try await formsService.updateFormSettings(form: updatedForm)
+                savedForm = updatedForm
+            } else {
+                savedForm = try await formsService.createForm(
+                    title: cleanedTitle,
+                    slug: cleanedSlug,
+                    status: status,
+                    enableCheckin: enableCheckin
+                )
+            }
+
+            try await formsService.replaceFieldsAndOptions(formId: savedForm.id, fields: normalizedFields())
+            onSaved(savedForm)
             errorMessage = nil
             dismiss()
         } catch {
             errorMessage = "Kunde inte spara formuläret. Dina ändringar finns kvar här."
+        }
+    }
+
+    private func deleteForm() async {
+        guard let form else { return }
+        isDeleting = true
+        defer { isDeleting = false }
+
+        do {
+            try await formsService.deleteForm(formId: form.id)
+            onDeleted(form.id)
+            errorMessage = nil
+            dismiss()
+        } catch {
+            errorMessage = "Kunde inte radera formuläret. Försök igen."
         }
     }
 
@@ -402,6 +552,16 @@ private struct FormBuilderEditorView: View {
         fields = normalizedFields()
     }
 
+    private func cleaned(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : trimmed
+    }
+
+    private func optionalCleaned(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func key(for current: String, label: String, fallback: String) -> String {
         let source = current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? label : current
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
@@ -435,7 +595,7 @@ private struct FormFieldEditorRow: View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 14) {
                 TextField("Label", text: $field.label)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
 
                 Picker("Typ", selection: $field.type) {
                     ForEach(FormFieldType.allCases) { type in
@@ -446,7 +606,7 @@ private struct FormFieldEditorRow: View {
                 .tint(.sdsDarkModeGreen)
 
                 TextField("Hjälptext", text: $field.helpText)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
 
                 Toggle("Obligatoriskt", isOn: $field.required)
                     .tint(.sdsDarkGreen)
@@ -468,7 +628,7 @@ private struct FormFieldEditorRow: View {
                         Label("Ta bort fält", systemImage: "trash")
                     }
                 }
-                .font(SDSType.rounded(13, weight: .bold))
+                .font(SDSType.agrandir(13, weight: .bold))
 
                 if field.type.usesOptions {
                     Divider()
@@ -479,10 +639,10 @@ private struct FormFieldEditorRow: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(field.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Namnlöst fält" : field.label)
-                    .font(SDSType.rounded(16, weight: .bold))
+                    .font(SDSType.agrandir(16, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
                 Text(field.type.title)
-                    .font(SDSType.rounded(12, weight: .bold))
+                    .font(SDSType.agrandir(12, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
             }
         }
@@ -492,7 +652,7 @@ private struct FormFieldEditorRow: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Alternativ")
-                    .font(SDSType.rounded(14, weight: .bold))
+                    .font(SDSType.agrandir(14, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
                 Spacer()
                 Button {
@@ -500,13 +660,13 @@ private struct FormFieldEditorRow: View {
                 } label: {
                     Label("Lägg till alternativ", systemImage: "plus")
                 }
-                .font(SDSType.rounded(12, weight: .bold))
+                .font(SDSType.agrandir(12, weight: .bold))
                 .foregroundColor(.sdsDarkModeGreen)
             }
 
             if field.options.isEmpty {
                 Text("Inga alternativ ännu")
-                    .font(SDSType.rounded(13, weight: .bold))
+                    .font(SDSType.agrandir(13, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
             } else {
                 ForEach($field.options) { $option in
@@ -540,31 +700,31 @@ private struct FormOptionEditorRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             TextField("Label", text: $option.label)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
 
             TextField("Beskrivning", text: $option.description)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
 
             Toggle("Aktiv", isOn: $option.active)
-                .font(SDSType.rounded(14, weight: .bold))
+                .font(SDSType.agrandir(14, weight: .bold))
                 .tint(.sdsDarkGreen)
 
             if isCourseChoice {
                 TextField("Dag/tid", text: $option.dayTime)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
                 TextField("Plats", text: $option.location)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
                 TextField("Nivå", text: $option.level)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
                 TextField("Platsantal", text: $option.capacity)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
                     .keyboardType(.numberPad)
             }
 
             Button(role: .destructive, action: delete) {
                 Label("Ta bort alternativ", systemImage: "trash")
             }
-            .font(SDSType.rounded(13, weight: .bold))
+            .font(SDSType.agrandir(13, weight: .bold))
         }
         .padding(12)
         .background(Color.sdsSubtleSurface)
@@ -582,11 +742,11 @@ private struct FormCheckInToggleRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(form.title)
-                        .font(SDSType.rounded(16, weight: .bold))
+                        .font(SDSType.agrandir(16, weight: .bold))
                         .foregroundColor(.sdsPrimaryText)
 
                     Text(statusText)
-                        .font(SDSType.rounded(12, weight: .bold))
+                        .font(SDSType.agrandir(12, weight: .bold))
                         .foregroundColor(.sdsSecondaryText)
                 }
 
@@ -602,7 +762,7 @@ private struct FormCheckInToggleRow: View {
                 get: { form.enableCheckin },
                 set: setEnabled
             ))
-            .font(SDSType.rounded(14, weight: .bold))
+            .font(SDSType.agrandir(14, weight: .bold))
             .tint(.sdsDarkGreen)
             .disabled(isSaving)
         }

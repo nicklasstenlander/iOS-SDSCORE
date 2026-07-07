@@ -22,15 +22,15 @@ extension Color {
         self.init(red: r, green: g, blue: b)
     }
 
-    static let sdsLightGreen = Color(hex: "CDDCD1")
+    static let sdsLightGreen = Color(hex: "CFDED2")
     static let sdsDarkGreen = Color(hex: "1e4025")
-    static let sdsMidGreen = Color(hex: "a3c0b2")
+    static let sdsMidGreen = Color(hex: "A0C4B9")
     static let sdsPink = Color(hex: "dd5c86")
     static let sdsTeal = Color(hex: "009399")
     static let sdsBackground = Color(hex: "f5f8f6")
     static let sdsCard = Color.white
     static let sdsText = Color(hex: "111111")
-    static let sdsMutedText = Color.sdsText.opacity(0.56)
+    static let sdsMutedText = Color.adaptive(light: "111111", dark: "f0f0f0").opacity(0.56)
     static let sdsSoftField = Color.sdsLightGreen.opacity(0.34)
     static let sdsPinkSurface = Color.sdsPink.opacity(0.12)
     static let sdsVioletSurface = Color(hex: "f0e7f4")
@@ -47,7 +47,8 @@ extension Color {
     static let sdsBorder = Color.adaptive(light: "e6eee9", dark: "2a2a2a")
     static let sdsInputBackground = Color.adaptive(light: "ffffff", dark: "1f1f1f")
     static let sdsSubtleSurface = Color.adaptive(light: "f8fafc", dark: "171717")
-    static let sdsDarkModeGreen = Color.adaptive(light: "1e4025", dark: "74c89b")
+    static let sdsIconBackground = Color.adaptive(light: "ffffff", dark: "2a2a2a").opacity(0.72)
+    static let sdsDarkModeGreen = Color.adaptive(light: "1e4025", dark: "A0C4B9")
     static let sdsLightGreenSurface = Color.adaptive(light: "CDDCD1", dark: "1f2f25")
     static let sdsPinkAdaptiveSurface = Color.adaptive(light: "fae8ef", dark: "2a1519")
     static let sdsAmberAdaptiveSurface = Color.adaptive(light: "f8edc0", dark: "2a2517")
@@ -58,20 +59,39 @@ extension Color {
 // MARK: - Delade UI-komponenter
 
 enum SDSType {
-    static func rounded(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom(fontName(for: weight), size: size)
+    enum Variant: String {
+        case regular          = "Agrandir-Regular"
+        case grandLight       = "Agrandir-GrandLight"
+        case grandHeavy       = "Agrandir-GrandHeavy"
+        case textBold         = "Agrandir-TextBold"
+        case narrow           = "Agrandir-Narrow"
+        case tight            = "Agrandir-Tight"
+        case wideLight        = "Agrandir-WideLight"
+        case wideBlackItalic  = "Agrandir-WideBlackItalic"
+        case thinItalic       = "Agrandir-ThinItalic"
     }
 
-    private static func fontName(for weight: Font.Weight) -> String {
-        if weight == .bold || weight == .heavy || weight == .black || weight == .semibold {
-            return "Agrandir-TextBold"
+    static func agrandir(_ size: CGFloat, variant: Variant) -> Font {
+        guard UIFont(name: variant.rawValue, size: size) != nil else {
+            assertionFailure("Missing Agrandir font: \(variant.rawValue)")
+            return .system(size: size)
         }
 
-        if weight == .light || weight == .ultraLight || weight == .thin {
-            return "Agrandir-GrandLight"
-        }
+        return .custom(variant.rawValue, size: size)
+    }
 
-        return "Agrandir-Regular"
+    static func agrandir(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        agrandir(size, variant: variantForWeight(weight))
+    }
+
+    private static func variantForWeight(_ weight: Font.Weight) -> Variant {
+        switch weight {
+        case .black, .heavy:           return .grandHeavy
+        case .bold, .semibold:         return .textBold
+        case .light:                   return .wideLight
+        case .thin, .ultraLight:       return .grandLight
+        default:                       return Variant.regular
+        }
     }
 }
 
@@ -92,17 +112,17 @@ struct SDSHeroHeader: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(title.uppercased())
-                    .font(SDSType.rounded(54, weight: .bold))
+                    .font(SDSType.agrandir(54, weight: .bold))
                     .foregroundColor(.white)
 
                 Text(tagline)
-                    .font(SDSType.rounded(20, weight: .regular))
+                    .font(SDSType.agrandir(20, weight: .regular))
                     .italic()
                     .foregroundColor(.white.opacity(0.78))
 
                 if showsCopyright {
                     Text("© \(Calendar.current.component(.year, from: Date())) Sollentuna Dans & Scenskola")
-                        .font(SDSType.rounded(12, weight: .regular))
+                        .font(SDSType.agrandir(12, weight: .regular))
                         .foregroundColor(.white.opacity(0.62))
                         .padding(.top, 22)
                 }
@@ -127,7 +147,7 @@ struct SDSPrimaryButton: View {
                         .tint(.sdsDarkGreen)
                 } else {
                     Text(title)
-                        .font(SDSType.rounded(17, weight: .bold))
+                        .font(SDSType.agrandir(17, weight: .bold))
                     Image(systemName: "arrow.right")
                         .font(.system(size: 15, weight: .bold))
                 }
@@ -154,7 +174,7 @@ struct SDSTextField: View {
         VStack(alignment: .leading, spacing: 8) {
             if !label.isEmpty {
                 Text(label.uppercased())
-                    .font(SDSType.rounded(12, weight: .bold))
+                    .font(SDSType.agrandir(12, weight: .bold))
                     .foregroundColor(.sdsDarkGreen)
             }
 
@@ -181,7 +201,7 @@ struct SDSTextField: View {
                         SecureField(placeholder, text: $text)
                     }
                 }
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -194,7 +214,7 @@ struct SDSTextField: View {
             }
         } else {
             TextField(placeholder, text: $text)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -210,11 +230,11 @@ struct SDSPill: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(SDSType.rounded(14, weight: .bold))
+                .font(SDSType.agrandir(14, weight: .bold))
                 .lineLimit(1)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
-                .background(isSelected ? Color.sdsDarkGreen : Color.sdsSurface)
+                .background(isSelected ? Color.sdsTeal : Color.sdsSurface)
                 .foregroundColor(isSelected ? .white : .sdsDarkModeGreen)
                 .clipShape(Capsule())
                 .overlay(
@@ -231,7 +251,7 @@ struct SDSBadge: View {
 
     var body: some View {
         Text(text)
-            .font(SDSType.rounded(12, weight: .bold))
+            .font(SDSType.agrandir(12, weight: .bold))
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background(color)

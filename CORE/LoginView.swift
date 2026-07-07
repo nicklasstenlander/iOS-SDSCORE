@@ -13,12 +13,7 @@ struct LoginView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottomTrailing) {
-                Image("CoreDancer")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: dancerWidth(for: proxy.size.width))
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -50,7 +45,7 @@ struct LoginView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: logoSize(for: width), height: logoSize(for: width))
-                .padding(.bottom, 28)
+                .padding(.bottom, 58)
 
             Text("CORE")
                 .font(.custom("Agrandir-GrandLight", size: width >= 390 ? 48 : 36))
@@ -65,23 +60,23 @@ struct LoginView: View {
 
             VStack(spacing: 0) {
                 Text("Välkommen tillbaka")
-                    .font(.custom("Agrandir-TextBold", size: 16))
+                    .font(.custom("Agrandir-TextBold", size: 12))
                     .foregroundColor(.sdsText)
 
                 Text("Logga in med din e-post och ditt lösenord.")
-                    .font(.custom("Agrandir-Regular", size: width >= 390 ? 16 : 15))
+                    .font(.custom("Agrandir-Regular", size: width >= 390 ? 12 : 13))
                     .foregroundColor(.sdsText)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 12)
+                    .padding(.top, 5)
             }
-            .padding(.bottom, 32)
+            .padding(.bottom, 52)
         }
         .frame(maxWidth: 360)
         .padding(.horizontal, 16)
     }
 
     private func formContent(for width: CGFloat) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             if let error = auth.errorMessage {
                 HStack(spacing: 8) {
                     Circle()
@@ -136,7 +131,7 @@ struct LoginView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Login")
+                        Text("Logga in")
                             .font(.custom("Agrandir-TextBold", size: 22))
                     }
                 }
@@ -149,7 +144,7 @@ struct LoginView: View {
             .disabled(auth.isLoading)
             .padding(.top, 18)
 
-            Text("© \(Calendar.current.component(.year, from: Date())) Sollentuna Dans & Scenskola")
+            Text("© \(String(Calendar.current.component(.year, from: Date()))) Sollentuna Dans & Scenskola")
                 .font(.custom("Agrandir-Regular", size: width >= 390 ? 16 : 14))
                 .foregroundColor(.sdsText)
                 .lineLimit(1)
@@ -277,7 +272,7 @@ private struct SDSLoginField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(SDSType.rounded(14))
+                .font(SDSType.agrandir(14))
                 .foregroundColor(.sdsText)
 
             HStack(spacing: 10) {
@@ -288,7 +283,7 @@ private struct SDSLoginField: View {
                         TextField(placeholder, text: $text)
                     }
                 }
-                .font(SDSType.rounded(14))
+                .font(SDSType.agrandir(14))
                 .foregroundColor(.sdsText)
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(.never)
@@ -306,13 +301,13 @@ private struct SDSLoginField: View {
                 }
             }
             .padding(.horizontal, 16)
-            .frame(height: 28)
+            .frame(height: 38)
             .background(Color.white)
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.sdsText, lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }

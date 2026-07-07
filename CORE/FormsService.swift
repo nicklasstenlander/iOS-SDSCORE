@@ -17,7 +17,7 @@ final class FormsService: ObservableObject {
         try await request(
             path: "/rest/v1/forms",
             queryItems: [
-                URLQueryItem(name: "select", value: "id,title,status,enable_checkin"),
+                URLQueryItem(name: "select", value: "id,title,slug,status,enable_checkin"),
                 URLQueryItem(name: "order", value: "title.asc")
             ]
         )
@@ -27,7 +27,7 @@ final class FormsService: ObservableObject {
         try await request(
             path: "/rest/v1/forms",
             queryItems: [
-                URLQueryItem(name: "select", value: "id,title,status,enable_checkin"),
+                URLQueryItem(name: "select", value: "id,title,slug,status,enable_checkin"),
                 URLQueryItem(name: "status", value: "eq.published")
             ]
         )
@@ -44,6 +44,55 @@ final class FormsService: ObservableObject {
                 "Content-Type": "application/json",
                 "Prefer": "return=minimal"
             ]
+        )
+    }
+
+    func createForm(title: String, slug: String, status: String, enableCheckin: Bool) async throws -> FormSummary {
+        let payload = FormSettingsUpdate(
+            title: title,
+            slug: slug,
+            status: status,
+            enableCheckin: enableCheckin
+        )
+        let created: [FormSummary] = try await request(
+            path: "/rest/v1/forms",
+            queryItems: [URLQueryItem(name: "select", value: "id,title,slug,status,enable_checkin")],
+            method: "POST",
+            body: try encoder.encode(payload),
+            additionalHeaders: [
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            ]
+        )
+        guard let form = created.first else { throw URLError(.badServerResponse) }
+        return form
+    }
+
+    func updateFormSettings(form: FormSummary) async throws {
+        let payload = FormSettingsUpdate(
+            title: form.title,
+            slug: form.slug,
+            status: form.status,
+            enableCheckin: form.enableCheckin
+        )
+        _ = try await requestData(
+            path: "/rest/v1/forms",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(form.id)")],
+            method: "PATCH",
+            body: try encoder.encode(payload),
+            additionalHeaders: [
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal"
+            ]
+        )
+    }
+
+    func deleteForm(formId: String) async throws {
+        _ = try await requestData(
+            path: "/rest/v1/forms",
+            queryItems: [URLQueryItem(name: "id", value: "eq.\(formId)")],
+            method: "DELETE",
+            additionalHeaders: ["Prefer": "return=minimal"]
         )
     }
 
@@ -294,6 +343,18 @@ final class FormsService: ObservableObject {
             .split(separator: "_")
             .joined(separator: "_")
         return key.isEmpty ? fallback : key
+    }
+}
+
+private struct FormSettingsUpdate: Encodable {
+    let title: String
+    let slug: String?
+    let status: String
+    let enableCheckin: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case title, slug, status
+        case enableCheckin = "enable_checkin"
     }
 }
 

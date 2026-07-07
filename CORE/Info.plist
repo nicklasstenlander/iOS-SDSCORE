@@ -2,6 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Agrandir-GrandHeavy.otf</string>
+		<string>Agrandir-GrandLight.otf</string>
+		<string>Agrandir-Narrow.otf</string>
+		<string>Agrandir-Regular.otf</string>
+		<string>Agrandir-TextBold.otf</string>
+		<string>Agrandir-ThinItalic.otf</string>
+		<string>Agrandir-Tight.otf</string>
+		<string>Agrandir-WideBlackItalic.otf</string>
+		<string>Agrandir-WideLight.otf</string>
+	</array>
 	<key>NSServices</key>
 	<array>
 		<dict>

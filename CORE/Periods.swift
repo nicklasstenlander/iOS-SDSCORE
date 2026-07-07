@@ -31,6 +31,23 @@ enum Periods {
         return available.first { $0.codePrefix == code } ?? all
     }
 
+    static func matches(_ event: Event, period: Period) -> Bool {
+        guard period != all else { return true }
+
+        let eventBlockId = event.grouping?.eventBlock?.id?.stringValue
+        if let selectedId = period.eventBlockId, let eventBlockId, eventBlockId == selectedId {
+            return true
+        }
+
+        guard let codePrefix = period.codePrefix else { return false }
+
+        return matchesPeriodCode(codePrefix, values: [
+            event.code,
+            event.schedule?.start?.date,
+            event.grouping?.eventBlock?.name,
+        ])
+    }
+
     static func matches(_ booking: Booking, period: Period) -> Bool {
         guard period != all else { return true }
 

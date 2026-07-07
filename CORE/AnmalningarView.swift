@@ -30,7 +30,7 @@ struct AnmalningarView: View {
     private var partialCount: Int { periodBookings.filter(\.isPartiallyPaid).count }
 
     private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(periodBookings)
+        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings)
     }
 
     var body: some View {
@@ -57,7 +57,7 @@ struct AnmalningarView: View {
                 .frame(maxWidth: .infinity)
             }
             .refreshable {
-                await cogWork.forceRefreshFromCogWork()
+                await cogWork.loadAllData()
             }
             .navigationTitle("Anmälningar")
             .toolbar {
@@ -82,7 +82,7 @@ struct AnmalningarView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.sdsDarkModeGreen)
             TextField("Sök deltagare eller kurs...", text: $searchText)
-                .font(SDSType.rounded(15))
+                .font(SDSType.agrandir(15))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         }
@@ -102,14 +102,24 @@ struct AnmalningarView: View {
                 ProgressView()
                     .tint(.sdsDarkModeGreen)
             } else {
-                Button {
-                    Task { await cogWork.forceRefreshFromCogWork() }
+                Menu {
+                    Button {
+                        Task { await cogWork.loadAllData() }
+                    } label: {
+                        Label("Hämta senaste från proxy", systemImage: "arrow.clockwise")
+                    }
+
+                    Button(role: .destructive) {
+                        Task { await cogWork.forceRefreshFromCogWork() }
+                    } label: {
+                        Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                    }
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.sdsDarkModeGreen)
-                .accessibilityLabel("Hämta ny data")
+                .accessibilityLabel("Uppdatera data")
             }
         }
     }
@@ -117,7 +127,7 @@ struct AnmalningarView: View {
     private var summaryRow: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(summaryTitle)
-                .font(SDSType.rounded(14, weight: .bold))
+                .font(SDSType.agrandir(14, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
             HStack(spacing: 14) {
@@ -130,7 +140,7 @@ struct AnmalningarView: View {
 
             if let updated = cogWork.lastUpdated {
                 Text("Uppdaterad \(updated, format: .dateTime.hour().minute())")
-                    .font(SDSType.rounded(11))
+                    .font(SDSType.agrandir(11))
                     .foregroundColor(.sdsTertiaryText)
             }
         }
@@ -172,11 +182,11 @@ struct AnmalningarView: View {
     private var content: some View {
         if cogWork.isLoading && cogWork.bookings.isEmpty {
             ProgressView("Laddar anmälningar...")
-                .font(SDSType.rounded(15, weight: .bold))
+                .font(SDSType.agrandir(15, weight: .bold))
                 .frame(maxWidth: .infinity, minHeight: 220)
         } else if filteredBookings.isEmpty {
             Text("Inga anmälningar hittades")
-                .font(SDSType.rounded(15, weight: .bold))
+                .font(SDSType.agrandir(15, weight: .bold))
                 .foregroundColor(.sdsMutedText)
                 .frame(maxWidth: .infinity, minHeight: 220)
         } else {
@@ -230,10 +240,10 @@ private struct SummaryMetric: View {
     var body: some View {
         HStack(spacing: 3) {
             Text("\(value)")
-                .font(SDSType.rounded(12, weight: .bold))
+                .font(SDSType.agrandir(12, weight: .bold))
                 .foregroundColor(color)
             Text(label)
-                .font(SDSType.rounded(12))
+                .font(SDSType.agrandir(12))
                 .foregroundColor(.sdsSecondaryText)
         }
     }
@@ -271,14 +281,14 @@ struct BookingRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Text(booking.formattedCreatedDate)
-                .font(SDSType.rounded(12))
+                .font(SDSType.agrandir(12))
                 .foregroundColor(.sdsMutedText)
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 8) {
                         Text(booking.participant?.name ?? "Okänd deltagare")
-                            .font(SDSType.rounded(16, weight: .bold))
+                            .font(SDSType.agrandir(16, weight: .bold))
                             .foregroundColor(.sdsPrimaryText)
                             .lineLimit(2)
 
@@ -288,7 +298,7 @@ struct BookingRow: View {
                     }
 
                     Text(booking.event?.name ?? "Okänd kurs")
-                        .font(SDSType.rounded(14))
+                        .font(SDSType.agrandir(14))
                         .foregroundColor(.sdsSecondaryText)
                         .lineLimit(2)
                 }
@@ -296,7 +306,7 @@ struct BookingRow: View {
                 Spacer(minLength: 10)
 
                 Text(booking.formattedPrice)
-                    .font(SDSType.rounded(15, weight: .bold))
+                    .font(SDSType.agrandir(15, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
                     .multilineTextAlignment(.trailing)
             }
@@ -308,7 +318,7 @@ struct BookingRow: View {
             )
 
             Text(booking.status?.displayName ?? "—")
-                .font(SDSType.rounded(12))
+                .font(SDSType.agrandir(12))
                 .foregroundColor(.sdsSecondaryText)
         }
         .padding(16)
@@ -328,10 +338,10 @@ struct BookingDetailSheet: View {
                 VStack(alignment: .leading, spacing: 30) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("DELTAGARE")
-                            .font(SDSType.rounded(12, weight: .bold))
+                            .font(SDSType.agrandir(12, weight: .bold))
                             .foregroundColor(.sdsMidGreen)
                         Text(booking.participant?.name ?? "Okänd deltagare")
-                            .font(SDSType.rounded(30, weight: .bold))
+                            .font(SDSType.agrandir(30, weight: .bold))
                             .foregroundColor(.sdsPrimaryText)
                     }
 
@@ -347,7 +357,7 @@ struct BookingDetailSheet: View {
                             Image(systemName: "book.closed")
                                 .foregroundColor(.sdsDarkGreen)
                             Text("KURSER")
-                                .font(SDSType.rounded(12, weight: .bold))
+                                .font(SDSType.agrandir(12, weight: .bold))
                                 .foregroundColor(.sdsMidGreen)
                         }
 
@@ -355,10 +365,10 @@ struct BookingDetailSheet: View {
                             ForEach(relatedBookings.isEmpty ? [booking] : relatedBookings) { item in
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.event?.name ?? "Okänd kurs")
-                                        .font(SDSType.rounded(16, weight: .bold))
+                                        .font(SDSType.agrandir(16, weight: .bold))
                                         .foregroundColor(.sdsText)
                                     Text(item.status?.name ?? "Accepterad")
-                                        .font(SDSType.rounded(14))
+                                        .font(SDSType.agrandir(14))
                                         .foregroundColor(.sdsMutedText)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -379,7 +389,7 @@ struct BookingDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Stäng") { dismiss() }
-                        .font(SDSType.rounded(15, weight: .bold))
+                        .font(SDSType.agrandir(15, weight: .bold))
                         .foregroundColor(.sdsDarkGreen)
                 }
             }
@@ -401,10 +411,10 @@ private struct DetailInfoRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.uppercased())
-                    .font(SDSType.rounded(11, weight: .bold))
+                    .font(SDSType.agrandir(11, weight: .bold))
                     .foregroundColor(.sdsMidGreen)
                 Text(value)
-                    .font(SDSType.rounded(15))
+                    .font(SDSType.agrandir(15))
                     .foregroundColor(.sdsText)
                     .fixedSize(horizontal: false, vertical: true)
             }

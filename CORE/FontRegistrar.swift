@@ -3,13 +3,24 @@ import Foundation
 import UIKit
 
 enum FontRegistrar {
-    @MainActor
+    private static var didRegisterAgrandirFonts = false
+
     static func registerAgrandirFonts() {
-        let fontURLs = [
+        guard !didRegisterAgrandirFonts else { return }
+        didRegisterAgrandirFonts = true
+
+        let fontNames = [
+            "Agrandir-GrandHeavy",
             "Agrandir-GrandLight",
+            "Agrandir-Narrow",
             "Agrandir-Regular",
-            "Agrandir-TextBold"
-        ].compactMap(fontURL)
+            "Agrandir-TextBold",
+            "Agrandir-ThinItalic",
+            "Agrandir-Tight",
+            "Agrandir-WideBlackItalic",
+            "Agrandir-WideLight"
+        ]
+        let fontURLs = fontNames.compactMap(fontURL)
 
         guard !fontURLs.isEmpty else { return }
 
@@ -18,22 +29,10 @@ enum FontRegistrar {
         }
     }
 
-    private static func fontURL(for assetName: String) -> URL? {
-        guard let asset = NSDataAsset(name: assetName) else { return nil }
-
-        let directory = FileManager.default.temporaryDirectory.appending(path: "AgrandirFonts", directoryHint: .isDirectory)
-        let url = directory.appending(path: "\(assetName).otf")
-
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-            if !FileManager.default.fileExists(atPath: url.path) {
-                try asset.data.write(to: url, options: .atomic)
-            }
-
+    private nonisolated static func fontURL(for assetName: String) -> URL? {
+        if let url = Bundle.main.url(forResource: assetName, withExtension: "otf") {
             return url
-        } catch {
-            return nil
         }
+        return Bundle.main.url(forResource: assetName, withExtension: "otf", subdirectory: "Fonts")
     }
 }

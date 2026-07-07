@@ -12,14 +12,13 @@ struct MainTabView: View {
             KunderView()
                 .tabItem { Label("Kunder", systemImage: "person.2") }
 
-            WebSectionPlaceholderView(section: .shop)
-                .tabItem { Label("Shop", systemImage: "bag") }
+            SamtalView()
+                .tabItem { Label("Samtal", systemImage: "phone") }
 
             MerView()
                 .tabItem { Label("Mer", systemImage: "ellipsis.circle") }
         }
-        .tint(.sdsDarkGreen)
-        .fontDesign(.rounded)
+        .tint(.sdsDarkModeGreen)
     }
 }
 
@@ -94,11 +93,11 @@ struct WebSectionPlaceholderView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         Text(section.title)
-                            .font(SDSType.rounded(30, weight: .bold))
+                            .font(SDSType.agrandir(30, weight: .bold))
                             .foregroundColor(.sdsDarkGreen)
 
                         Text(section.subtitle)
-                            .font(SDSType.rounded(15))
+                            .font(SDSType.agrandir(15))
                             .foregroundColor(.sdsMutedText)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -113,7 +112,7 @@ struct WebSectionPlaceholderView: View {
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Från sds-dashboard")
-                            .font(SDSType.rounded(12, weight: .bold))
+                            .font(SDSType.agrandir(12, weight: .bold))
                             .foregroundColor(.sdsMutedText)
                             .textCase(.uppercase)
 
@@ -122,7 +121,7 @@ struct WebSectionPlaceholderView: View {
                                 Image(systemName: "checkmark.circle")
                                     .foregroundColor(.sdsDarkGreen)
                                 Text(item)
-                                    .font(SDSType.rounded(14))
+                                    .font(SDSType.agrandir(14))
                                     .foregroundColor(.sdsText)
                             }
                         }
@@ -151,6 +150,9 @@ struct MerView: View {
     @EnvironmentObject var auth: SupabaseAuthService
     @EnvironmentObject var cogWork: CogWorkService
     @State private var isShowingCogWorkSettings = false
+    @State private var callDirectoryStatus: String?
+    @State private var isUpdatingCallDirectory = false
+    @State private var dataRefreshStatus: String?
 
     var body: some View {
         NavigationStack {
@@ -161,7 +163,7 @@ struct MerView: View {
 
                 Section("Sidor") {
                     NavigationLink {
-                        WebSectionPlaceholderView(section: .calls)
+                        SamtalView()
                     } label: {
                         Label("Samtal", systemImage: WebSection.calls.icon)
                     }
@@ -185,19 +187,76 @@ struct MerView: View {
                     }
 
                     NavigationLink {
-                        CheckInView()
-                    } label: {
-                        Label("Öppet hus – Incheckning", systemImage: "checkmark.circle")
-                    }
-
-                    NavigationLink {
                         FormBuilderView()
                     } label: {
                         Label("Formulär", systemImage: WebSection.forms.icon)
                     }
+
+                    NavigationLink {
+                        CheckInView()
+                    } label: {
+                        Label("Incheckning", systemImage: "checkmark.circle")
+                    }
+                }
+
+                Section {
+                    Button {
+                        Task { await refreshFromProxy() }
+                    } label: {
+                        HStack {
+                            Label("Hämta senaste från proxy", systemImage: "arrow.clockwise")
+                            Spacer()
+                            if cogWork.isLoading {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(cogWork.isLoading)
+
+                    Button(role: .destructive) {
+                        Task { await purgeProxyAndRefresh() }
+                    } label: {
+                        Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                    }
+                    .disabled(cogWork.isLoading)
+
+                    if let dataRefreshStatus {
+                        Text(dataRefreshStatus)
+                            .font(SDSType.agrandir(13))
+                            .foregroundColor(dataRefreshStatus.contains("Kunde inte") ? .sdsPink : .sdsMutedText)
+                    }
+                } header: {
+                    Text("Data")
+                } footer: {
+                    Text("Använd proxyhämtning normalt. Rensa proxy bara när du behöver tvinga fram helt färsk CogWork-data.")
+                }
+
+                Section {
+                    Button {
+                        Task { await updateCallDirectory() }
+                    } label: {
+                        HStack {
+                            Label("Uppdatera nummerpresentation", systemImage: "phone.badge.checkmark")
+                            Spacer()
+                            if isUpdatingCallDirectory {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isUpdatingCallDirectory)
+
+                    if let callDirectoryStatus {
+                        Text(callDirectoryStatus)
+                            .font(SDSType.agrandir(13))
+                            .foregroundColor(callDirectoryStatus.contains("Kunde inte") ? .sdsPink : .sdsMutedText)
+                    }
+                } header: {
+                    Text("Telefoni")
+                } footer: {
+                    Text("Aktivera efter första uppdateringen: Inställningar → Telefon → Blockering och identifiering av samtal → slå på CORE.")
                 }
             }
-            .font(SDSType.rounded(15))
+            .font(SDSType.agrandir(15))
             .navigationTitle("Mer")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -240,16 +299,16 @@ struct MerView: View {
                     .frame(width: 40, height: 40)
                     .overlay(
                         Text(String(profile.firstName.prefix(1)))
-                            .font(SDSType.rounded(16, weight: .bold))
+                            .font(SDSType.agrandir(16, weight: .bold))
                             .foregroundColor(.sdsDarkGreen)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.fullName)
-                        .font(SDSType.rounded(15, weight: .bold))
+                        .font(SDSType.agrandir(15, weight: .bold))
                         .foregroundColor(.sdsDarkGreen)
                     Text(profile.role.capitalized)
-                        .font(SDSType.rounded(12))
+                        .font(SDSType.agrandir(12))
                         .foregroundColor(.sdsMutedText)
                 }
             }
@@ -257,6 +316,29 @@ struct MerView: View {
             Label("CORE", systemImage: "person.crop.circle")
                 .foregroundColor(.sdsMutedText)
         }
+    }
+
+    private func updateCallDirectory() async {
+        isUpdatingCallDirectory = true
+        defer { isUpdatingCallDirectory = false }
+
+        do {
+            let count = try CORECallDirectoryStore.writeEntries(from: cogWork.bookings)
+            try await CORECallDirectoryStore.reloadExtension()
+            callDirectoryStatus = "Nummerpresentation uppdaterad med \(count) nummer."
+        } catch {
+            callDirectoryStatus = "Kunde inte uppdatera nummerpresentation: \(error.localizedDescription)"
+        }
+    }
+
+    private func refreshFromProxy() async {
+        await cogWork.loadAllData()
+        dataRefreshStatus = cogWork.errorMessage ?? "Data hämtad från Cloudflare Proxy."
+    }
+
+    private func purgeProxyAndRefresh() async {
+        await cogWork.forceRefreshFromCogWork()
+        dataRefreshStatus = cogWork.errorMessage ?? "Proxy rensad och ny data hämtad från CogWork."
     }
 
 }
@@ -273,13 +355,13 @@ struct CogWorkAPISettingsSheet: View {
             Form {
                 Section {
                     SecureField("CogWork-lösenord", text: $cogWorkPassword)
-                        .font(SDSType.rounded(15))
+                        .font(SDSType.agrandir(15))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
                     if let passwordMessage {
                         Text(passwordMessage)
-                            .font(SDSType.rounded(13))
+                            .font(SDSType.agrandir(13))
                             .foregroundColor(passwordMessage.contains("sparat") ? .sdsDarkModeGreen : .sdsPink)
                     }
                 } header: {
@@ -288,7 +370,7 @@ struct CogWorkAPISettingsSheet: View {
                     Text("Används för kunddata och andra CogWork-endpoints som kräver lösenord.")
                 }
             }
-            .font(SDSType.rounded(15))
+            .font(SDSType.agrandir(15))
             .navigationTitle("CogWork API")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -333,4 +415,5 @@ struct CogWorkAPISettingsSheet: View {
     MainTabView()
         .environmentObject(SupabaseAuthService())
         .environmentObject(CogWorkService())
+        .environmentObject(GoalsService())
 }

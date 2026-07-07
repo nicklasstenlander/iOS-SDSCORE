@@ -252,18 +252,20 @@ struct FormFieldDraft: Identifiable, Hashable {
 
 struct FormSummary: Codable, Identifiable, Hashable {
     let id: String
-    let title: String
-    let status: String
+    var title: String
+    var slug: String?
+    var status: String
     var enableCheckin: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status
+        case id, title, slug, status
         case enableCheckin = "enable_checkin"
     }
 
-    init(id: String, title: String, status: String, enableCheckin: Bool = false) {
+    init(id: String, title: String, slug: String? = nil, status: String, enableCheckin: Bool = false) {
         self.id = id
         self.title = title
+        self.slug = slug
         self.status = status
         self.enableCheckin = enableCheckin
     }
@@ -272,6 +274,7 @@ struct FormSummary: Codable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         title = try container.decode(String.self, forKey: .title)
+        slug = try container.decodeIfPresent(String.self, forKey: .slug)
         status = try container.decode(String.self, forKey: .status)
         enableCheckin = try container.decodeIfPresent(Bool.self, forKey: .enableCheckin) ?? false
     }

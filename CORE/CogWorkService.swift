@@ -8,6 +8,7 @@ final class CogWorkService: ObservableObject {
 
     @Published var bookings: [Booking] = []
     @Published var events: [Event] = []
+    @Published var duplicateBookings: [Booking] = []
     @Published var users: [CogWorkUser] = []
     @Published var selectedUserBookings: [Booking] = []
     @Published var isLoading = false
@@ -69,6 +70,7 @@ final class CogWorkService: ObservableObject {
             let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
             bookings = decoded.bookings.bookings
             events = decoded.events?.events ?? []
+            duplicateBookings = decoded.duplicates?.bookings ?? []
             lastUpdated = Date()
         } catch {
             errorMessage = "Kunde inte hämta översiktsdata. \(error.localizedDescription)"
@@ -174,11 +176,25 @@ final class CogWorkService: ObservableObject {
 
     /// Tvingar Workern att rensa cache och hämta färskt från CogWork ("Från CogWork"-knappen).
     func forceRefreshFromCogWork() async {
-        guard let purgeURL = URL(string: "\(baseURL)/purge") else { return }
         isLoading = true
+        isLoadingEvents = true
+        errorMessage = nil
         defer { isLoading = false }
-        _ = try? await URLSession.shared.data(from: purgeURL)
-        await loadBookings()
+        defer { isLoadingEvents = false }
+
+        URLCache.shared.removeAllCachedResponses()
+
+        do {
+            try await purgeProxyCache()
+            let data = try await proxyData(queryItems: [URLQueryItem(name: "type", value: "all")])
+            let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
+            bookings = decoded.bookings.bookings
+            events = decoded.events?.events ?? []
+            duplicateBookings = decoded.duplicates?.bookings ?? []
+            lastUpdated = Date()
+        } catch {
+            errorMessage = "Kunde inte rensa cache och hämta ny data. \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Härledda värden för Översikt
@@ -193,6 +209,73 @@ final class CogWorkService: ObservableObject {
 
     var unpaidCount: Int { periodBookings.filter { $0.payment?.paid == false }.count }
 
+    /// Antal kurser (event) i vald period — matchar webbens "Aktiva kurser".
+    var periodEventCount: Int {
+        events.filter { Periods.matches($0, period: selectedPeriod) }.count
+    }
+
+    /// Kombinerat antal ärenden som kräver manuell hantering (NEW-status + dubbelanmälda).
+    /// Matchar webbens `alerts.length` i Dashboard.
+    var pendingReviewCount: Int {
+        let newCount = periodBookings.filter(\.isPendingReviewForOverview).count
+        return newCount + deduplicatedDuplicateCount
+    }
+
+    private var deduplicatedDuplicateCount: Int {
+        // Föreställningar (primaryEventGroup.id = 18358) exkluderas — samma filter som webben.
+        let excludedEventIds = Set(
+            events.compactMap { event -> Int? in
+                event.grouping?.primaryEventGroup?.id?.intValue == 18358 ? event.id : nil
+            }
+        )
+
+        var seenParticipants = Set<String>()
+        var seenBookings = Set<String>()
+        var count = 0
+        let grouped = Dictionary(grouping: duplicateBookings) { b -> String in
+            let pKey = b.participant?.key ?? b.participant?.id.map(String.init) ?? ""
+            let eId = b.event?.id.map(String.init) ?? ""
+            return "\(pKey)::\(eId)"
+        }
+        for (_, group) in grouped {
+            guard group.count > 1, let first = group.first else { continue }
+            let code = first.event?.code?.lowercased() ?? ""
+            if code.contains("forestallning") { continue }
+            if let eId = first.event?.id, excludedEventIds.contains(eId) { continue }
+            let pKey = first.participant?.key ?? first.participant?.id.map(String.init) ?? ""
+            guard !pKey.isEmpty, !seenParticipants.contains(pKey) else { continue }
+            seenParticipants.insert(pKey)
+            if !seenBookings.contains(first.key) {
+                seenBookings.insert(first.key)
+                count += 1
+            }
+        }
+        return count
+    }
+
+    /// Medelbeläggning i procent för vald period.
+    /// Formel: summa antagna / summa maxParticipants över alla events i perioden.
+    var avgOccupancyPercent: Int? {
+        let periodEvents = events.filter { Periods.matches($0, period: selectedPeriod) }
+        guard !periodEvents.isEmpty else { return nil }
+
+        let bookingsByEventId = Dictionary(grouping: periodBookings) { b -> String in
+            b.event?.id.map(String.init) ?? ""
+        }
+
+        var totalAccepted = 0
+        var totalMax = 0
+        for event in periodEvents {
+            let max = event.requirements?.maxParticipants ?? 0
+            if max > 0 { totalMax += max }
+            let eventBookings = bookingsByEventId[String(event.id)] ?? []
+            totalAccepted += eventBookings.filter(\.isAcceptedForOverview).count
+        }
+
+        guard totalMax > 0 else { return nil }
+        return Int((Double(totalAccepted) / Double(totalMax) * 100).rounded())
+    }
+
     private var hasCogWorkPassword: Bool {
         !cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -205,11 +288,30 @@ final class CogWorkService: ObservableObject {
             throw URLError(.badURL)
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        // Vanliga apphämtningar ska ta senaste svaret från Cloudflare Proxy,
+        // men inte tvinga Workern att gå hela vägen till CogWork.
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
         return data
+    }
+
+    private func purgeProxyCache() async throws {
+        guard let purgeURL = URL(string: "\(baseURL)/purge") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: purgeURL)
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
     }
 
     private func publicAPI<T: Decodable>(

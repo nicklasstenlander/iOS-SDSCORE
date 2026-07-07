@@ -6,9 +6,7 @@ struct SDSCoreApp: App {
     @StateObject private var cogWork = CogWorkService()
     @StateObject private var goals = GoalsService()
 
-    init() {
-        FontRegistrar.registerAgrandirFonts()
-    }
+    init() {}
 
     var body: some Scene {
         WindowGroup {
