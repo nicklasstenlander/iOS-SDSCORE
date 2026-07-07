@@ -13,7 +13,27 @@ struct LoginView: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottomTrailing) {
-                
+                Color.white
+                    .ignoresSafeArea()
+
+                Image("SDSLoginBackground")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height * 0.38, alignment: .bottom)
+                    .clipped()
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.18),
+                                .init(color: .black, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .ignoresSafeArea(edges: .bottom)
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -28,7 +48,6 @@ struct LoginView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .background(Color.white.ignoresSafeArea())
         }
         #if DEBUG
         .onAppear {
@@ -41,11 +60,11 @@ struct LoginView: View {
 
     private func brandHeader(for width: CGFloat) -> some View {
         VStack(spacing: 0) {
-            Image("CoreCircleLogo")
+            Image("SDSDancerLoginLogo")
                 .resizable()
                 .scaledToFit()
-                .frame(width: logoSize(for: width), height: logoSize(for: width))
-                .padding(.bottom, 58)
+                .frame(width: dancerWidth(for: width), height: dancerLogoHeight(for: width))
+                .padding(.bottom, 38)
 
             Text("CORE")
                 .font(.custom("Agrandir-GrandLight", size: width >= 390 ? 48 : 36))
@@ -58,18 +77,7 @@ struct LoginView: View {
                 .multilineTextAlignment(.center)
                 .padding(.bottom, 25)
 
-            VStack(spacing: 0) {
-                Text("Välkommen tillbaka")
-                    .font(.custom("Agrandir-TextBold", size: 12))
-                    .foregroundColor(.sdsText)
-
-                Text("Logga in med din e-post och ditt lösenord.")
-                    .font(.custom("Agrandir-Regular", size: width >= 390 ? 12 : 13))
-                    .foregroundColor(.sdsText)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 5)
-            }
-            .padding(.bottom, 52)
+                        .padding(.bottom, 52)
         }
         .frame(maxWidth: 360)
         .padding(.horizontal, 16)
@@ -144,9 +152,9 @@ struct LoginView: View {
             .disabled(auth.isLoading)
             .padding(.top, 18)
 
-            Text("© \(String(Calendar.current.component(.year, from: Date()))) Sollentuna Dans & Scenskola")
+            Text("© \(String(Calendar.current.component(.year, from: Date()))) Moon Movements AB")
                 .font(.custom("Agrandir-Regular", size: width >= 390 ? 16 : 14))
-                .foregroundColor(.sdsText)
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
                 .frame(maxWidth: .infinity)
@@ -204,10 +212,6 @@ struct LoginView: View {
     private func signIn() async {
         await auth.signIn(email: email, password: password)
 
-        if auth.isAuthenticated && auth.errorMessage == nil {
-            cogWork.cogWorkPassword = password
-        }
-
         #if DEBUG
         if auth.isAuthenticated && auth.errorMessage == nil {
             DebugCredentialStore.email = email
@@ -239,6 +243,10 @@ struct LoginView: View {
 
     private func dancerWidth(for width: CGFloat) -> CGFloat {
         min(max(width * 0.30, 110), 180)
+    }
+
+    private func dancerLogoHeight(for width: CGFloat) -> CGFloat {
+        width >= 390 ? 158 : 132
     }
 }
 

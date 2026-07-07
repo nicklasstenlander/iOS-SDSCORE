@@ -1,29 +1,41 @@
 import Foundation
 
-struct Period: Hashable, Identifiable {
+struct Period: Hashable, Identifiable, Sendable {
     let displayName: String
     let eventBlockId: String?
     let codePrefix: String?
 
-    var id: String {
+    nonisolated var id: String {
         codePrefix ?? "alla"
+    }
+
+    nonisolated static func == (lhs: Period, rhs: Period) -> Bool {
+        lhs.displayName == rhs.displayName
+            && lhs.eventBlockId == rhs.eventBlockId
+            && lhs.codePrefix == rhs.codePrefix
+    }
+
+    nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(displayName)
+        hasher.combine(eventBlockId)
+        hasher.combine(codePrefix)
     }
 }
 
 enum Periods {
-    static let all = Period(displayName: "Alla terminer", eventBlockId: nil, codePrefix: nil)
-    static let spring2026 = Period(displayName: "Vårterminen 2026", eventBlockId: "18402", codePrefix: "VT26")
-    static let fall2026 = Period(displayName: "Höstterminen 2026", eventBlockId: "19459", codePrefix: "HT26")
+    nonisolated static let all = Period(displayName: "Alla terminer", eventBlockId: nil, codePrefix: nil)
+    nonisolated static let spring2026 = Period(displayName: "Vårterminen 2026", eventBlockId: "18402", codePrefix: "VT26")
+    nonisolated static let fall2026 = Period(displayName: "Höstterminen 2026", eventBlockId: "19459", codePrefix: "HT26")
     // TODO: eventBlockId för HT 2025.
-    static let fall2025 = Period(displayName: "HT 2025", eventBlockId: nil, codePrefix: "HT25")
-    static let available = [all, fall2026, spring2026, fall2025]
+    nonisolated static let fall2025 = Period(displayName: "HT 2025", eventBlockId: nil, codePrefix: "HT25")
+    nonisolated static let available = [all, fall2026, spring2026, fall2025]
 
-    static let eventBlockIdsByCode: [String: String] = [
+    nonisolated static let eventBlockIdsByCode: [String: String] = [
         "VT26": "18402",
         "HT26": "19459"
     ]
 
-    static func defaultPeriod(date: Date = Date()) -> Period {
+    nonisolated static func defaultPeriod(date: Date = Date()) -> Period {
         let year = Calendar.current.component(.year, from: date) % 100
         let month = Calendar.current.component(.month, from: date)
         let term = month < 7 ? "VT" : "HT"
@@ -31,7 +43,7 @@ enum Periods {
         return available.first { $0.codePrefix == code } ?? all
     }
 
-    static func matches(_ event: Event, period: Period) -> Bool {
+    nonisolated static func matches(_ event: Event, period: Period) -> Bool {
         guard period != all else { return true }
 
         let eventBlockId = event.grouping?.eventBlock?.id?.stringValue
@@ -48,7 +60,7 @@ enum Periods {
         ])
     }
 
-    static func matches(_ booking: Booking, period: Period) -> Bool {
+    nonisolated static func matches(_ booking: Booking, period: Period) -> Bool {
         guard period != all else { return true }
 
         let eventBlockId = booking.event?.grouping?.eventBlock?.id?.stringValue
@@ -63,20 +75,20 @@ enum Periods {
         return eventCode?.hasPrefix(codePrefix.uppercased()) == true
     }
 
-    static func defaultEventBlockId(date: Date = Date()) -> String {
+    nonisolated static func defaultEventBlockId(date: Date = Date()) -> String {
         let year = Calendar.current.component(.year, from: date) % 100
         let month = Calendar.current.component(.month, from: date)
         let term = month < 7 ? "VT" : "HT"
         return eventBlockIdsByCode[String(format: "%@%02d", term, year)] ?? ""
     }
 
-    static func defaultFullPeriodLabel(date: Date = Date()) -> String {
+    nonisolated static func defaultFullPeriodLabel(date: Date = Date()) -> String {
         let year = Calendar.current.component(.year, from: date)
         let month = Calendar.current.component(.month, from: date)
         return month < 7 ? "Vårterminen \(year)" : "Höstterminen \(year)"
     }
 
-    static func blockNameToCode(_ name: String) -> String {
+    nonisolated static func blockNameToCode(_ name: String) -> String {
         if let year = firstYear(in: name, prefixes: ["Höst", "Hösten", "höst", "hösten"]) {
             return "HT\(String(year.suffix(2)))"
         }
@@ -88,7 +100,7 @@ enum Periods {
         return name
     }
 
-    static func blockNameToFullLabel(_ name: String) -> String {
+    nonisolated static func blockNameToFullLabel(_ name: String) -> String {
         if let year = firstYear(in: name, prefixes: ["Höst", "Hösten", "höst", "hösten"]) {
             return "Höstterminen \(year)"
         }
@@ -100,7 +112,7 @@ enum Periods {
         return name
     }
 
-    static func codeToLabel(_ code: String) -> String {
+    nonisolated static func codeToLabel(_ code: String) -> String {
         guard code.count == 4 else { return code }
         let term = String(code.prefix(2))
         let year = String(code.suffix(2))
@@ -108,11 +120,11 @@ enum Periods {
         return "\(term) 20\(year)"
     }
 
-    static func isPeriodCode(_ value: String) -> Bool {
+    nonisolated static func isPeriodCode(_ value: String) -> Bool {
         value.range(of: #"^(HT|VT)\d{2}$"#, options: .regularExpression) != nil
     }
 
-    static func dateToPeriodCode(_ date: String?) -> String {
+    nonisolated static func dateToPeriodCode(_ date: String?) -> String {
         guard let date, date.count >= 7 else { return "" }
         let year = String(date.prefix(4))
         let monthText = String(date.dropFirst(5).prefix(2))
@@ -121,7 +133,7 @@ enum Periods {
         return "\(month >= 7 ? "HT" : "VT")\(year.suffix(2))"
     }
 
-    static func matchesPeriodCode(_ code: String, values: [String?]) -> Bool {
+    nonisolated static func matchesPeriodCode(_ code: String, values: [String?]) -> Bool {
         let normalizedCode = code.uppercased()
         return values.contains { value in
             guard let value else { return false }
@@ -130,7 +142,7 @@ enum Periods {
         }
     }
 
-    static func sortPeriodCodes(_ codes: [String]) -> [String] {
+    nonisolated static func sortPeriodCodes(_ codes: [String]) -> [String] {
         codes.sorted { lhs, rhs in
             guard let left = parsePeriod(lhs), let right = parsePeriod(rhs) else { return lhs > rhs }
             if left.year != right.year { return left.year > right.year }
@@ -138,14 +150,14 @@ enum Periods {
         }
     }
 
-    private static func parsePeriod(_ code: String) -> (term: String, year: Int)? {
+    private nonisolated static func parsePeriod(_ code: String) -> (term: String, year: Int)? {
         guard isPeriodCode(code) else { return nil }
         let term = String(code.prefix(2))
         let year = Int(code.suffix(2)) ?? 0
         return (term, year)
     }
 
-    private static func firstYear(in value: String, prefixes: [String]) -> String? {
+    private nonisolated static func firstYear(in value: String, prefixes: [String]) -> String? {
         for prefix in prefixes {
             let pattern = #"\#(prefix)\s+(\d{4})"#
             if let range = value.range(of: pattern, options: .regularExpression) {

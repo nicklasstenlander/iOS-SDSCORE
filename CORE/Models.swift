@@ -159,14 +159,14 @@ enum FlexibleID: Codable, Hashable {
         }
     }
 
-    var stringValue: String {
+    nonisolated var stringValue: String {
         switch self {
         case .int(let value): String(value)
         case .string(let value): value
         }
     }
 
-    var intValue: Int? {
+    nonisolated var intValue: Int? {
         switch self {
         case .int(let value): value
         case .string(let value): Int(value)
@@ -207,7 +207,7 @@ enum FlexibleValue: Codable, Hashable {
         }
     }
 
-    var stringValue: String {
+    nonisolated var stringValue: String {
         switch self {
         case .string(let value): value
         case .number(let value): value.formatted()
@@ -496,19 +496,19 @@ struct UserProfile: Codable {
 // MARK: - Booking status helpers
 
 extension Booking {
-    var isAcceptedForOverview: Bool {
+    nonisolated var isAcceptedForOverview: Bool {
         let code = status?.code?.uppercased() ?? ""
         let name = status?.name?.lowercased() ?? ""
         return code == "ACCEPTED" || name.contains("accepterad") || name.contains("antagen")
     }
 
-    var isAwaitingResponseForOverview: Bool {
+    nonisolated var isAwaitingResponseForOverview: Bool {
         let code = status?.code?.uppercased() ?? ""
         let name = status?.name?.lowercased() ?? ""
         return code == "AWAITING_RESPONSE" || code == "WAITING" || name.contains("väntar")
     }
 
-    var isPendingReviewForOverview: Bool {
+    nonisolated var isPendingReviewForOverview: Bool {
         status?.code?.uppercased() == "NEW"
     }
 }
@@ -565,3 +565,7 @@ extension String {
         return trimmed.isEmpty ? nil : trimmed
     }
 }
+
+// MARK: - Sendable conformances for background computation
+extension Booking: @unchecked Sendable {}
+extension Event: @unchecked Sendable {}

@@ -11,11 +11,41 @@ struct OversiktView: View {
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
     @State private var contentWidth: CGFloat = 0
+    @State private var cachedCourseRows: [CourseOverviewData] = []
+    @State private var isRefreshingCourseRows = false
 
     private var periods: [Period] { Periods.available }
 
     private var periodBookings: [Booking] {
         cogWork.periodBookings
+    }
+
+    private var statisticalPeriodBookings: [Booking] {
+        cogWork.statisticalPeriodBookings
+    }
+
+    private var bookingCountByParticipant: [String: Int] {
+        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
+    }
+
+    private var courseChangesByParticipant: [String: ParticipantCourseChange] {
+        CourseMetricsEngine.courseChangesByParticipant(
+            bookings: cogWork.bookings,
+            currentPeriodCode: cogWork.selectedPeriod.codePrefix,
+            eventLookup: eventLookup
+        )
+    }
+
+    private var eventLookup: [String: Event] {
+        cogWork.events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty {
+                keys.append(key)
+            }
+            for key in keys where lookup[key] == nil {
+                lookup[key] = event
+            }
+        }
     }
 
     var body: some View {
@@ -62,6 +92,31 @@ struct OversiktView: View {
                 await goals.loadGoals()
             }
         }
+        .task(id: cogWork.selectedPeriod) {
+            await rebuildCourseRows()
+        }
+        .onChange(of: cogWork.lastUpdated) { _, _ in
+            Task { await rebuildCourseRows() }
+        }
+    }
+
+    private func rebuildCourseRows() async {
+        isRefreshingCourseRows = true
+        defer { isRefreshingCourseRows = false }
+
+        let bookings = cogWork.bookings
+        let events = cogWork.events
+        let period = cogWork.selectedPeriod
+
+        try? await Task.sleep(for: .milliseconds(100))
+        guard !Task.isCancelled else { return }
+
+        let rows = await Task.detached(priority: .userInitiated) {
+            OversiktView.buildCourseRowsBackground(bookings: bookings, events: events, period: period)
+        }.value
+
+        guard !Task.isCancelled else { return }
+        cachedCourseRows = rows
     }
 
     private var header: some View {
@@ -82,7 +137,7 @@ struct OversiktView: View {
             }
 
             if cogWork.isLoading {
-                ProgressView("Hämtar data från Cloudflare Proxy")
+                ProgressView("Hämtar data...")
                     .font(SDSType.agrandir(15, weight: .bold))
                     .tint(.sdsDarkGreen)
             } else if !statLine.isEmpty {
@@ -228,9 +283,17 @@ struct OversiktView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Kursöversikt")
-                        .font(SDSType.agrandir(22, weight: .bold))
-                        .foregroundColor(.sdsPrimaryText)
+                    HStack(spacing: 8) {
+                        Text("Kursöversikt")
+                            .font(SDSType.agrandir(22, weight: .bold))
+                            .foregroundColor(.sdsPrimaryText)
+
+                        if isRefreshingCourseRows {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .tint(.sdsDarkModeGreen)
+                        }
+                    }
 
                     if let updated = cogWork.lastUpdated {
                         Text("Uppdaterad \(updated, format: .dateTime.hour().minute())")
@@ -267,13 +330,17 @@ struct OversiktView: View {
 
             courseSearchField
 
-            if courseRows.isEmpty {
+            let allRows = cachedCourseRows
+            let filtered = filteredRows(from: allRows)
+            let sorted = sortedRows(from: filtered)
+
+            if allRows.isEmpty {
                 EmptyOverviewSectionCard(
                     icon: "book.closed",
                     title: "Ingen kursdata",
                     message: "Kursöversikten fylls när det finns anmälningar i vald period."
                 )
-            } else if filteredCourseRows.isEmpty {
+            } else if filtered.isEmpty {
                 EmptyOverviewSectionCard(
                     icon: "magnifyingglass",
                     title: "Inga kurser matchar",
@@ -281,7 +348,7 @@ struct OversiktView: View {
                 )
             } else {
                 LazyVGrid(columns: courseGridColumns, alignment: .leading, spacing: 12) {
-                    ForEach(sortedCourseRows) { row in
+                    ForEach(sorted) { row in
                         CourseOverviewRow(
                             row: row,
                             isExpanded: expandedCourseID == row.id
@@ -356,15 +423,15 @@ struct OversiktView: View {
 
     private var newTodayCount: Int {
         let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
-        return periodBookings.filter { $0.created.hasPrefix(today) }.count
+        return statisticalPeriodBookings.filter { $0.created.hasPrefix(today) }.count
     }
 
     private var unpaidCount: Int {
-        periodBookings.filter { $0.payment?.paid == false }.count
+        statisticalPeriodBookings.filter { $0.payment?.paid == false }.count
     }
 
     private var acceptedCount: Int {
-        periodBookings.filter { $0.isAcceptedForOverview }.count
+        statisticalPeriodBookings.filter { $0.isAcceptedForOverview }.count
     }
 
     private var awaitingCount: Int {
@@ -372,12 +439,12 @@ struct OversiktView: View {
     }
 
     private var acceptedPercent: Int {
-        guard !periodBookings.isEmpty else { return 0 }
-        return Int((Double(acceptedCount) / Double(periodBookings.count) * 100).rounded())
+        guard !statisticalPeriodBookings.isEmpty else { return 0 }
+        return Int((Double(acceptedCount) / Double(statisticalPeriodBookings.count) * 100).rounded())
     }
 
     private var uniqueCourseCount: Int {
-        Set(periodBookings.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
+        Set(statisticalPeriodBookings.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
     }
 
     /// Antal aktiva kurser: använder events-listan om tillgänglig, annars booking-deriverat antal.
@@ -387,11 +454,11 @@ struct OversiktView: View {
     }
 
     private var paidCount: Int {
-        periodBookings.filter { $0.payment?.paid == true }.count
+        statisticalPeriodBookings.filter { $0.payment?.paid == true }.count
     }
 
     private var unpaidAmount: Double {
-        periodBookings
+        statisticalPeriodBookings
             .filter { $0.payment?.paid == false }
             .compactMap { $0.payment?.priceAgreed }
             .reduce(0, +)
@@ -403,14 +470,14 @@ struct OversiktView: View {
     }
 
     private var totalInvoiced: Double {
-        periodBookings
+        statisticalPeriodBookings
             .filter(\.isAcceptedForOverview)
             .compactMap { $0.payment?.priceAgreed }
             .reduce(0, +)
     }
 
     private var totalReceived: Double {
-        periodBookings
+        statisticalPeriodBookings
             .filter { $0.payment?.paid == true }
             .compactMap { $0.payment?.amountPaid }
             .reduce(0, +)
@@ -451,14 +518,14 @@ struct OversiktView: View {
             OverviewCard(
                 id: .registered,
                 title: "Anmälda",
-                value: formatted(periodBookings.count),
+                value: formatted(statisticalPeriodBookings.count),
                 subtitle: "\(uniqueCourseCount) kurser",
                 delta: newTodayCount > 0 ? "+\(newTodayCount) idag" : nil,
                 icon: "person.2",
                 style: .violet,
                 detailTitle: "Anmälningar",
                 detailRows: [
-                    .init(label: "Totalt antal", value: formatted(periodBookings.count)),
+                    .init(label: "Totalt antal", value: formatted(statisticalPeriodBookings.count)),
                     .init(label: "Nya idag", value: formatted(newTodayCount)),
                     .init(label: "Unika kurser", value: formatted(uniqueCourseCount))
                 ],
@@ -468,14 +535,14 @@ struct OversiktView: View {
                 id: .accepted,
                 title: "Antagna",
                 value: formatted(acceptedCount),
-                subtitle: periodBookings.isEmpty ? "Ingen data" : "\(acceptedPercent)% av anmälda",
+                subtitle: statisticalPeriodBookings.isEmpty ? "Ingen data" : "\(acceptedPercent)% av anmälda",
                 icon: "person.crop.circle.badge.checkmark",
                 style: .ok,
                 detailTitle: "Antagna deltagare",
                 detailRows: [
                     .init(label: "Antagna", value: formatted(acceptedCount)),
                     .init(label: "Andel", value: "\(acceptedPercent)%"),
-                    .init(label: "Ej antagna/okänt", value: formatted(max(periodBookings.count - acceptedCount, 0)))
+                    .init(label: "Ej antagna/okänt", value: formatted(max(statisticalPeriodBookings.count - acceptedCount, 0)))
                 ],
                 bookings: sortedBookingsForPanel(periodBookings.filter(\.isAcceptedForOverview))
             ),
@@ -571,12 +638,12 @@ struct OversiktView: View {
     }
 
     private func sortedBookingsForPanel(_ bookings: [Booking]) -> [Booking] {
-        bookings.sorted { $0.created.localizedStandardCompare($1.created) == .orderedDescending }
+        bookings.sorted { $0.created > $1.created }
     }
 
     private var averageBookingsPerCourse: String {
         guard uniqueCourseCount > 0 else { return "—" }
-        let average = Double(periodBookings.count) / Double(uniqueCourseCount)
+        let average = Double(statisticalPeriodBookings.count) / Double(uniqueCourseCount)
         return average.formatted(.number.precision(.fractionLength(1)).locale(Locale(identifier: "sv_SE")))
     }
 
@@ -589,7 +656,7 @@ struct OversiktView: View {
     private func currentValue(for goal: Goal) -> Double {
         switch goal.metric {
         case .bookingsCount:
-            Double(periodBookings.count)
+            Double(statisticalPeriodBookings.count)
         case .acceptedCount:
             Double(acceptedCount)
         case .revenue:
@@ -602,91 +669,112 @@ struct OversiktView: View {
     }
 
     private var newStudentCount: Int {
-        let counts = CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings)
-        return periodBookings.filter { CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: counts) }.count
+        let counts = bookingCountByParticipant
+        return statisticalPeriodBookings.filter {
+            CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: counts)
+        }.count
     }
 
-    private var courseRows: [CourseOverviewData] {
-        let grouped = Dictionary(grouping: periodBookings) { booking in
-            booking.event?.id.map(String.init) ?? booking.event?.name ?? booking.key
-        }
-
-        return grouped.compactMap { key, bookings in
-            guard let first = bookings.first else { return nil }
-            let accepted = bookings.filter(\.isAcceptedForOverview).count
-            let unpaid = bookings.filter { $0.payment?.paid == false }.count
-            let revenue = bookings
-                .filter(\.isAcceptedForOverview)
-                .compactMap { $0.payment?.priceAgreed }
-                .reduce(0, +)
-            let paid = bookings.filter { $0.payment?.paid == true }.count
-            let percent = bookings.isEmpty ? 0 : Int((Double(accepted) / Double(bookings.count) * 100).rounded())
-
-            return CourseOverviewData(
-                id: key,
-                name: first.event?.name ?? "Okänd kurs",
-                meta: courseMeta(for: first),
-                registered: bookings.count,
-                accepted: accepted,
-                occupancyPercent: percent,
-                revenue: revenue,
-                unpaid: unpaid,
-                paid: paid,
-                status: courseStatus(accepted: accepted, registered: bookings.count, unpaid: unpaid)
-            )
-        }
-    }
-
-    private var sortedCourseRows: [CourseOverviewData] {
-        switch courseSort {
-        case .attention:
-            return filteredCourseRows.sorted {
-                if $0.unpaid == $1.unpaid { return $0.registered > $1.registered }
-                return $0.unpaid > $1.unpaid
-            }
-        case .registered:
-            return filteredCourseRows.sorted { $0.registered > $1.registered }
-        case .occupancy:
-            return filteredCourseRows.sorted { $0.occupancyPercent < $1.occupancyPercent }
-        case .revenue:
-            return filteredCourseRows.sorted { $0.revenue > $1.revenue }
-        }
-    }
-
-    private var filteredCourseRows: [CourseOverviewData] {
+    private func filteredRows(from rows: [CourseOverviewData]) -> [CourseOverviewData] {
         let query = courseSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return courseRows }
-        return courseRows.filter { row in
+        guard !query.isEmpty else { return rows }
+        return rows.filter { row in
             row.name.localizedCaseInsensitiveContains(query)
                 || row.meta.localizedCaseInsensitiveContains(query)
                 || row.status.title.localizedCaseInsensitiveContains(query)
         }
     }
 
-    private func courseMeta(for booking: Booking) -> String {
-        let period = booking.overviewPeriodLabel.map {
-            $0.replacingOccurrences(of: "Höstterminen ", with: "HT")
-                .replacingOccurrences(of: "Vårterminen ", with: "VT")
-        }
-        let start = [booking.event?.startDate, booking.event?.startTime]
-            .compactMap { value -> String? in
-                guard let value, !value.isEmpty else { return nil }
-                return value
+    private func sortedRows(from rows: [CourseOverviewData]) -> [CourseOverviewData] {
+        switch courseSort {
+        case .attention:
+            return rows.sorted {
+                if $0.unpaid == $1.unpaid { return $0.registered > $1.registered }
+                return $0.unpaid > $1.unpaid
             }
-            .joined(separator: " ")
-
-        return [period, start.isEmpty ? nil : start]
-            .compactMap { $0 }
-            .joined(separator: " · ")
+        case .registered:
+            return rows.sorted { $0.registered > $1.registered }
+        case .occupancy:
+            return rows.sorted { $0.occupancyPercent < $1.occupancyPercent }
+        case .revenue:
+            return rows.sorted { $0.revenue > $1.revenue }
+        }
     }
 
-    private func courseStatus(accepted: Int, registered: Int, unpaid: Int) -> CourseOverviewStatus {
-        if unpaid > 0 { return .attention }
-        guard registered > 0 else { return .neutral }
-        let percent = Double(accepted) / Double(registered)
-        if percent >= 0.85 { return .strong }
-        if percent <= 0.45 { return .low }
-        return .neutral
+}
+
+private extension OversiktView {
+    nonisolated static func buildCourseRowsBackground(
+        bookings: [Booking],
+        events: [Event],
+        period: Period
+    ) -> [CourseOverviewData] {
+        let lookup: [String: Event] = events.reduce(into: [:]) { result, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty { keys.append(key) }
+            for key in keys where result[key] == nil { result[key] = event }
+        }
+        let counts = CourseMetricsEngine.countBookingsByParticipant(bookings, eventLookup: lookup)
+        let courseChanges = CourseMetricsEngine.courseChangesByParticipant(
+            bookings: bookings,
+            currentPeriodCode: period.codePrefix,
+            eventLookup: lookup
+        )
+        let periodBookings = bookings.filter { Periods.matches($0, period: period) }
+        let grouped = Dictionary(grouping: periodBookings) { booking in
+            booking.event?.id.map(String.init) ?? booking.event?.name ?? booking.key
+        }
+
+        return grouped.compactMap { key, group in
+            guard let first = group.first else { return nil }
+            let statistical = group.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+            let accepted = statistical.filter(\.isAcceptedForOverview).count
+            let unpaid = statistical.filter { $0.payment?.paid == false }.count
+            let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
+            let paid = statistical.filter { $0.payment?.paid == true }.count
+            let pct = statistical.isEmpty ? 0 : Int((Double(accepted) / Double(statistical.count) * 100).rounded())
+            let participants = group
+                .sorted { ($0.participant?.name ?? "") < ($1.participant?.name ?? "") }
+                .map { b in
+                    CourseParticipantData(
+                        booking: b,
+                        isNewStudent: CourseMetricsEngine.isNewStudentBooking(b, countByParticipant: counts),
+                        courseChange: CourseMetricsEngine.courseChange(for: b, changesByParticipant: courseChanges),
+                        isTicketPurchase: CourseMetricsEngine.isPerformance(booking: b, eventLookup: lookup)
+                    )
+                }
+
+            let status: CourseOverviewStatus
+            if unpaid > 0 { status = .attention }
+            else if statistical.isEmpty { status = .neutral }
+            else {
+                let ratio = Double(accepted) / Double(statistical.count)
+                status = ratio >= 0.85 ? .strong : (ratio <= 0.45 ? .low : .neutral)
+            }
+
+            let periodLabel = first.overviewPeriodLabel.map {
+                $0.replacingOccurrences(of: "Höstterminen ", with: "HT")
+                    .replacingOccurrences(of: "Vårterminen ", with: "VT")
+            }
+            let startParts = [first.event?.startDate, first.event?.startTime]
+                .compactMap { v -> String? in guard let v, !v.isEmpty else { return nil }; return v }
+            let meta = ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+                .compactMap { $0 }.joined(separator: " · ")
+
+            return CourseOverviewData(
+                id: key,
+                name: first.event?.name ?? "Okänd kurs",
+                meta: meta,
+                registered: statistical.count,
+                accepted: accepted,
+                occupancyPercent: pct,
+                revenue: revenue,
+                unpaid: unpaid,
+                paid: paid,
+                participants: participants,
+                status: status
+            )
+        }
     }
 }
 
@@ -936,6 +1024,18 @@ private struct OverviewBookingList: View {
         bookings.reduce(0) { $0 + CourseMetricsEngine.bookingTicketQuantity($1) }
     }
 
+    private var eventLookup: [String: Event] {
+        cogWork.events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty {
+                keys.append(key)
+            }
+            for key in keys where lookup[key] == nil {
+                lookup[key] = event
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
@@ -954,7 +1054,10 @@ private struct OverviewBookingList: View {
             .padding(.bottom, 8)
 
             ForEach(visibleBookings) { booking in
-                OverviewBookingRow(booking: booking) {
+                OverviewBookingRow(
+                    booking: booking,
+                    isTicketPurchase: CourseMetricsEngine.isPerformance(booking: booking, eventLookup: eventLookup)
+                ) {
                     await openCustomer(for: booking)
                 }
 
@@ -1002,6 +1105,7 @@ private struct OverviewBookingList: View {
 
 private struct OverviewBookingRow: View {
     let booking: Booking
+    let isTicketPurchase: Bool
     let openCustomer: () async -> Void
 
     private var ticketQuantity: Int {
@@ -1040,6 +1144,10 @@ private struct OverviewBookingRow: View {
 
             if ticketQuantity > 1 {
                 SDSBadge(text: "\(ticketQuantity) biljetter", color: .sdsSurface, textColor: .sdsSecondaryText)
+            }
+
+            if isTicketPurchase {
+                SDSBadge(text: "Biljettköp", color: .sdsAmberAdaptiveSurface, textColor: .sdsWarningText)
             }
 
             PaymentStatusBadge(booking: booking)
@@ -1259,16 +1367,43 @@ private struct CourseOverviewRow: View {
                 }
 
                 if isExpanded {
-                    VStack(spacing: 0) {
-                        CourseDetailLine(label: "Anmälda", value: "\(row.registered)")
-                        CourseDetailLine(label: "Antagna", value: "\(row.accepted)")
-                        CourseDetailLine(label: "Betalda", value: "\(row.paid)")
-                        CourseDetailLine(label: "Obetalda", value: "\(row.unpaid)")
-                        CourseDetailLine(label: "Intäkt", value: row.fullRevenueText)
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(spacing: 0) {
+                            CourseDetailLine(label: "Anmälda", value: "\(row.registered)")
+                            CourseDetailLine(label: "Antagna", value: "\(row.accepted)")
+                            CourseDetailLine(label: "Betalda", value: "\(row.paid)")
+                            CourseDetailLine(label: "Obetalda", value: "\(row.unpaid)")
+                            CourseDetailLine(label: "Intäkt", value: row.fullRevenueText)
+                        }
+                        .padding(.horizontal, 14)
+                        .background(Color.sdsSubtleSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                        if !row.participants.isEmpty {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("Deltagare")
+                                    .font(SDSType.agrandir(11, weight: .bold))
+                                    .foregroundColor(.sdsSecondaryText)
+                                    .textCase(.uppercase)
+                                    .padding(.horizontal, 14)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 4)
+
+                                ForEach(row.participants) { participant in
+                                    CourseParticipantRow(participant: participant)
+
+                                    if participant.id != row.participants.last?.id {
+                                        Rectangle()
+                                            .fill(Color.sdsBorder)
+                                            .frame(height: 1)
+                                            .padding(.leading, 14)
+                                    }
+                                }
+                            }
+                            .background(Color.sdsSubtleSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
                     }
-                    .padding(.horizontal, 14)
-                    .background(Color.sdsSubtleSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
@@ -1295,6 +1430,53 @@ private struct CourseOverviewRow: View {
 
     private var metricColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+    }
+}
+
+private struct CourseParticipantRow: View {
+    let participant: CourseParticipantData
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(name)
+                    .font(SDSType.agrandir(13, weight: .bold))
+                    .foregroundColor(.sdsPrimaryText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Text(participant.booking.status?.name ?? "Accepterad")
+                    .font(SDSType.agrandir(11))
+                    .foregroundColor(.sdsSecondaryText)
+                    .lineLimit(1)
+            }
+
+            if participant.isTicketPurchase || participant.isNewStudent || participant.courseChange != nil {
+                HStack(spacing: 6) {
+                    if participant.isTicketPurchase {
+                        SDSBadge(text: "Biljettköp", color: .sdsAmberAdaptiveSurface, textColor: .sdsWarningText)
+                    } else if participant.isNewStudent {
+                        SDSBadge(text: "Ny elev", color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
+                    }
+
+                    if !participant.isTicketPurchase, let courseChange = participant.courseChange {
+                        SDSBadge(text: courseChange.badgeText, color: .sdsAmberAdaptiveSurface, textColor: .sdsWarningText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .accessibilityLabel(courseChange.badgeText)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private var name: String {
+        participant.booking.participant?.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? participant.booking.participant?.name ?? "Okänd deltagare"
+            : "Okänd deltagare"
     }
 }
 
@@ -1375,6 +1557,7 @@ private struct CourseOverviewData: Identifiable {
     let revenue: Double
     let unpaid: Int
     let paid: Int
+    let participants: [CourseParticipantData]
     let status: CourseOverviewStatus
 
     var revenueText: String {
@@ -1384,6 +1567,15 @@ private struct CourseOverviewData: Identifiable {
     var fullRevenueText: String {
         "\(Int(revenue).formatted(.number.locale(Locale(identifier: "sv_SE")))) kr"
     }
+}
+
+private struct CourseParticipantData: Identifiable {
+    let booking: Booking
+    let isNewStudent: Bool
+    let courseChange: ParticipantCourseChange?
+    let isTicketPurchase: Bool
+
+    var id: Int { booking.id }
 }
 
 private enum CourseOverviewStatus {
@@ -1444,7 +1636,7 @@ private extension GoalMetric {
 }
 
 private extension Booking {
-    var overviewPeriodLabel: String? {
+    nonisolated var overviewPeriodLabel: String? {
         let value = event?.startDateTime ?? created
         let year = String(value.prefix(4))
         guard year.count == 4 else { return nil }

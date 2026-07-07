@@ -22,16 +22,22 @@ struct AlertsResult {
 }
 
 enum AlertsEngine {
-    private static let excludedDuplicateGroupIds: Set<Int> = [18358]
     private static let pendingStatusCodes: Set<String> = ["NEW"]
 
     static func buildAlerts(allBookings: [Booking], duplicateBookings: [Booking] = [], events: [Event] = []) -> AlertsResult {
         var seen = Set<String>()
         var result: [BookingAlert] = []
+        let eventLookup: [String: Event] = events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty {
+                keys.append(key)
+            }
+            for key in keys where lookup[key] == nil {
+                lookup[key] = event
+            }
+        }
         let excludedEventIds = Set(events.compactMap { event -> Int? in
-            guard let groupId = event.grouping?.primaryEventGroup?.id?.intValue,
-                  excludedDuplicateGroupIds.contains(groupId) else { return nil }
-            return event.id
+            CourseMetricsEngine.isPerformance(event: event) ? event.id : nil
         })
 
         let grouped = Dictionary(grouping: duplicateBookings) { booking in
@@ -43,8 +49,7 @@ enum AlertsEngine {
         var seenParticipants = Set<String>()
         for groupBookings in grouped.values where groupBookings.count > 1 {
             guard let first = groupBookings.first else { continue }
-            let code = first.event?.code?.lowercased() ?? ""
-            if code.contains("forestallning") || first.event?.id.map({ excludedEventIds.contains($0) }) == true {
+            if CourseMetricsEngine.isPerformance(booking: first, eventLookup: eventLookup) || first.event?.id.map({ excludedEventIds.contains($0) }) == true {
                 continue
             }
 
@@ -60,7 +65,7 @@ enum AlertsEngine {
 
         for booking in allBookings {
             let code = booking.status?.code?.uppercased() ?? ""
-            if pendingStatusCodes.contains(code), !seen.contains(booking.key) {
+            if CourseMetricsEngine.isStatisticalBooking(booking, eventLookup: eventLookup), pendingStatusCodes.contains(code), !seen.contains(booking.key) {
                 seen.insert(booking.key)
                 result.append(BookingAlert(booking: booking, type: .pending, count: 1))
             }

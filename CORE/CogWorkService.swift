@@ -203,29 +203,50 @@ final class CogWorkService: ObservableObject {
         bookings.filter { Periods.matches($0, period: selectedPeriod) }
     }
 
-    var totalCount: Int { periodBookings.count }
+    var statisticalPeriodBookings: [Booking] {
+        let lookup = eventLookup
+        return periodBookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+    }
 
-    var paidCount: Int { periodBookings.filter { $0.payment?.paid == true }.count }
+    var statisticalPeriodEvents: [Event] {
+        events.filter { Periods.matches($0, period: selectedPeriod) && CourseMetricsEngine.isStatisticalEvent($0) }
+    }
 
-    var unpaidCount: Int { periodBookings.filter { $0.payment?.paid == false }.count }
+    private var eventLookup: [String: Event] {
+        events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty {
+                keys.append(key)
+            }
+            for key in keys where lookup[key] == nil {
+                lookup[key] = event
+            }
+        }
+    }
+
+    var totalCount: Int { statisticalPeriodBookings.count }
+
+    var paidCount: Int { statisticalPeriodBookings.filter { $0.payment?.paid == true }.count }
+
+    var unpaidCount: Int { statisticalPeriodBookings.filter { $0.payment?.paid == false }.count }
 
     /// Antal kurser (event) i vald period — matchar webbens "Aktiva kurser".
     var periodEventCount: Int {
-        events.filter { Periods.matches($0, period: selectedPeriod) }.count
+        statisticalPeriodEvents.count
     }
 
     /// Kombinerat antal ärenden som kräver manuell hantering (NEW-status + dubbelanmälda).
     /// Matchar webbens `alerts.length` i Dashboard.
     var pendingReviewCount: Int {
-        let newCount = periodBookings.filter(\.isPendingReviewForOverview).count
+        let newCount = statisticalPeriodBookings.filter(\.isPendingReviewForOverview).count
         return newCount + deduplicatedDuplicateCount
     }
 
     private var deduplicatedDuplicateCount: Int {
-        // Föreställningar (primaryEventGroup.id = 18358) exkluderas — samma filter som webben.
+        let lookup = eventLookup
         let excludedEventIds = Set(
             events.compactMap { event -> Int? in
-                event.grouping?.primaryEventGroup?.id?.intValue == 18358 ? event.id : nil
+                CourseMetricsEngine.isPerformance(event: event) ? event.id : nil
             }
         )
 
@@ -239,8 +260,7 @@ final class CogWorkService: ObservableObject {
         }
         for (_, group) in grouped {
             guard group.count > 1, let first = group.first else { continue }
-            let code = first.event?.code?.lowercased() ?? ""
-            if code.contains("forestallning") { continue }
+            if CourseMetricsEngine.isPerformance(booking: first, eventLookup: lookup) { continue }
             if let eId = first.event?.id, excludedEventIds.contains(eId) { continue }
             let pKey = first.participant?.key ?? first.participant?.id.map(String.init) ?? ""
             guard !pKey.isEmpty, !seenParticipants.contains(pKey) else { continue }
@@ -256,10 +276,10 @@ final class CogWorkService: ObservableObject {
     /// Medelbeläggning i procent för vald period.
     /// Formel: summa antagna / summa maxParticipants över alla events i perioden.
     var avgOccupancyPercent: Int? {
-        let periodEvents = events.filter { Periods.matches($0, period: selectedPeriod) }
+        let periodEvents = statisticalPeriodEvents
         guard !periodEvents.isEmpty else { return nil }
 
-        let bookingsByEventId = Dictionary(grouping: periodBookings) { b -> String in
+        let bookingsByEventId = Dictionary(grouping: statisticalPeriodBookings) { b -> String in
             b.event?.id.map(String.init) ?? ""
         }
 

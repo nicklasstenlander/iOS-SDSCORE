@@ -16,21 +16,36 @@ struct AnmalningarView: View {
             let matchesPayment = paymentFilter.matches(booking)
             return matchesSearch && matchesPayment
         }
-        .sorted {
-            $0.created.localizedStandardCompare($1.created) == .orderedDescending
-        }
+        .sorted { $0.created > $1.created }
     }
 
     private var periodBookings: [Booking] {
         cogWork.periodBookings
     }
 
-    private var paidCount: Int { periodBookings.filter(\.isPaid).count }
-    private var unpaidCount: Int { periodBookings.filter(\.isUnpaid).count }
-    private var partialCount: Int { periodBookings.filter(\.isPartiallyPaid).count }
+    private var statisticalPeriodBookings: [Booking] {
+        let lookup = eventLookup
+        return periodBookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+    }
+
+    private var paidCount: Int { statisticalPeriodBookings.filter(\.isPaid).count }
+    private var unpaidCount: Int { statisticalPeriodBookings.filter(\.isUnpaid).count }
+    private var partialCount: Int { statisticalPeriodBookings.filter(\.isPartiallyPaid).count }
 
     private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings)
+        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
+    }
+
+    private var eventLookup: [String: Event] {
+        cogWork.events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty {
+                keys.append(key)
+            }
+            for key in keys where lookup[key] == nil {
+                lookup[key] = event
+            }
+        }
     }
 
     var body: some View {
@@ -68,8 +83,8 @@ struct AnmalningarView: View {
         }
         .background(Color.sdsPageBackground.ignoresSafeArea())
         .task {
-            if cogWork.bookings.isEmpty {
-                await cogWork.loadBookings()
+            if cogWork.bookings.isEmpty || cogWork.events.isEmpty {
+                await cogWork.loadAllData()
             }
         }
         .sheet(item: $selectedBooking) { booking in
@@ -192,7 +207,12 @@ struct AnmalningarView: View {
         } else {
             LazyVStack(spacing: 0) {
                 ForEach(filteredBookings) { booking in
-                    BookingRow(booking: booking, isNewStudent: isNewStudent(booking))
+                    BookingRow(
+                        booking: booking,
+                        isNewStudent: isNewStudent(booking),
+                        isTicketPurchase: isTicketPurchase(booking),
+                        scheduleText: scheduleText(for: booking)
+                    )
                         .contentShape(Rectangle())
                         .onTapGesture { selectedBooking = booking }
 
@@ -223,6 +243,14 @@ struct AnmalningarView: View {
 
     private func isNewStudent(_ booking: Booking) -> Bool {
         CourseMetricsEngine.isNewStudentBooking(booking, countByParticipant: bookingCountByParticipant)
+    }
+
+    private func isTicketPurchase(_ booking: Booking) -> Bool {
+        CourseMetricsEngine.isPerformance(booking: booking, eventLookup: eventLookup)
+    }
+
+    private func scheduleText(for booking: Booking) -> String? {
+        booking.courseScheduleText(eventLookup: eventLookup)
     }
 
     private func relatedBookings(for booking: Booking) -> [Booking] {
@@ -277,6 +305,8 @@ private enum PaymentFilter: CaseIterable, Hashable {
 struct BookingRow: View {
     let booking: Booking
     let isNewStudent: Bool
+    let isTicketPurchase: Bool
+    let scheduleText: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -292,8 +322,10 @@ struct BookingRow: View {
                             .foregroundColor(.sdsPrimaryText)
                             .lineLimit(2)
 
-                        if isNewStudent {
-                            SDSBadge(text: "Ny elev")
+                        if isTicketPurchase {
+                            SDSBadge(text: "Biljettköp", color: .sdsAmberAdaptiveSurface, textColor: .sdsWarningText)
+                        } else if isNewStudent {
+                            SDSBadge(text: "Ny elev", color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
                         }
                     }
 
@@ -301,6 +333,13 @@ struct BookingRow: View {
                         .font(SDSType.agrandir(14))
                         .foregroundColor(.sdsSecondaryText)
                         .lineLimit(2)
+
+                    if let scheduleText {
+                        Label(scheduleText, systemImage: "calendar")
+                            .font(SDSType.agrandir(12, weight: .bold))
+                            .foregroundColor(.sdsSecondaryText)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 10)
@@ -495,6 +534,97 @@ private extension Booking {
         let month = Int(monthValue) ?? 8
         return month >= 7 ? "Höstterminen \(year)" : "Vårterminen \(year)"
     }
+
+    func courseScheduleText(eventLookup: [String: Event]) -> String? {
+        let fullEvent = [event?.id.map(String.init), event?.key]
+            .compactMap { $0 }
+            .compactMap { eventLookup[$0] }
+            .first
+
+        if let dayAndTimeInfo = fullEvent?.schedule?.dayAndTimeInfo?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !dayAndTimeInfo.isEmpty {
+            return dayAndTimeInfo
+        }
+
+        if let startDateTime = event?.startDateTime,
+           let formatted = Self.formattedSwedishDayAndTime(from: startDateTime) {
+            return formatted
+        }
+
+        let combinedStart = [event?.startDate, event?.startTime]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        guard !combinedStart.isEmpty else { return nil }
+        if let formatted = Self.formattedSwedishDayAndTime(from: combinedStart) {
+            return formatted
+        }
+
+        return combinedStart
+    }
+
+    private static func formattedSwedishDayAndTime(from value: String) -> String? {
+        let normalized = value.replacingOccurrences(of: " ", with: "T")
+        let date = isoDateTimeFormatter.date(from: normalized)
+            ?? isoDateTimeWithFractionalSecondsFormatter.date(from: normalized)
+            ?? fallbackDateTimeFormatter.date(from: value)
+            ?? fallbackShortDateTimeFormatter.date(from: value)
+            ?? fallbackDateOnlyFormatter.date(from: value)
+        guard let date else { return nil }
+
+        let weekday = swedishWeekdayFormatter.string(from: date)
+        let time = timeFormatter.string(from: date)
+        return "\(weekday) \(time)"
+    }
+
+    private static let isoDateTimeFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let isoDateTimeWithFractionalSecondsFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let fallbackDateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    private static let fallbackShortDateTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter
+    }()
+
+    private static let fallbackDateOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static let swedishWeekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 }
 
 private extension Booking.BookingStatus {
