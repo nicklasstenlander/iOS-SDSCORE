@@ -7,7 +7,7 @@ struct OversiktView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var colorScheme
     @State private var expandedCard: OverviewCardID?
-    @State private var expandedCourseID: String?
+    @State private var selectedCourse: CourseOverviewData?
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
     @State private var contentWidth: CGFloat = 0
@@ -97,6 +97,15 @@ struct OversiktView: View {
         }
         .onChange(of: cogWork.lastUpdated) { _, _ in
             Task { await rebuildCourseRows() }
+        }
+        .onChange(of: cogWork.selectedPeriod) { _, _ in
+            expandedCard = nil
+            selectedCourse = nil
+        }
+        .sheet(item: $selectedCourse) { course in
+            CourseDetailSheet(course: course)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -349,13 +358,8 @@ struct OversiktView: View {
             } else {
                 LazyVGrid(columns: courseGridColumns, alignment: .leading, spacing: 12) {
                     ForEach(sorted) { row in
-                        CourseOverviewRow(
-                            row: row,
-                            isExpanded: expandedCourseID == row.id
-                        ) {
-                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                                expandedCourseID = expandedCourseID == row.id ? nil : row.id
-                            }
+                        CourseOverviewRow(row: row) {
+                            selectedCourse = row
                         }
                     }
                 }
@@ -376,7 +380,7 @@ struct OversiktView: View {
             if !courseSearchText.isEmpty {
                 Button {
                     courseSearchText = ""
-                    expandedCourseID = nil
+                    selectedCourse = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.sdsTertiaryText)
@@ -529,7 +533,7 @@ struct OversiktView: View {
                     .init(label: "Nya idag", value: formatted(newTodayCount)),
                     .init(label: "Unika kurser", value: formatted(uniqueCourseCount))
                 ],
-                bookings: sortedBookingsForPanel(periodBookings)
+                bookingFilter: .all
             ),
             OverviewCard(
                 id: .accepted,
@@ -544,7 +548,7 @@ struct OversiktView: View {
                     .init(label: "Andel", value: "\(acceptedPercent)%"),
                     .init(label: "Ej antagna/okänt", value: formatted(max(statisticalPeriodBookings.count - acceptedCount, 0)))
                 ],
-                bookings: sortedBookingsForPanel(periodBookings.filter(\.isAcceptedForOverview))
+                bookingFilter: .accepted
             ),
             OverviewCard(
                 id: .unpaid,
@@ -559,7 +563,7 @@ struct OversiktView: View {
                     .init(label: "Betalda", value: formatted(paidCount)),
                     .init(label: "Utestående belopp", value: "\(formattedCurrency(unpaidAmount)) kr")
                 ],
-                bookings: sortedBookingsForPanel(periodBookings.filter { $0.payment?.paid == false })
+                bookingFilter: .unpaid
             ),
             OverviewCard(
                 id: .awaiting,
@@ -574,7 +578,7 @@ struct OversiktView: View {
                     .init(label: "Period", value: cogWork.selectedPeriod.displayName),
                     .init(label: "Status", value: awaitingCount > 0 ? "Behöver åtgärd" : "Klart")
                 ],
-                bookings: sortedBookingsForPanel(periodBookings.filter { $0.isPendingReviewForOverview || $0.isAwaitingResponseForOverview })
+                bookingFilter: .pendingOrAwaiting
             ),
             OverviewCard(
                 id: .courses,
@@ -617,7 +621,7 @@ struct OversiktView: View {
                     .init(label: "Mottaget", value: "\(formattedCurrency(totalReceived)) kr"),
                     .init(label: "Mottaget aviserat", value: "\(receivedPercent)%")
                 ],
-                bookings: sortedBookingsForPanel(periodBookings.filter { $0.isAcceptedForOverview && $0.payment?.priceAgreed != nil })
+                bookingFilter: .invoicedWithAmount
             ),
             OverviewCard(
                 id: .received,
@@ -632,13 +636,9 @@ struct OversiktView: View {
                     .init(label: "Betalda bokningar", value: formatted(paidCount)),
                     .init(label: "Obetalda bokningar", value: formatted(unpaidCount))
                 ],
-                bookings: sortedBookingsForPanel(periodBookings.filter { $0.payment?.paid == true })
+                bookingFilter: .paid
             )
         ]
-    }
-
-    private func sortedBookingsForPanel(_ bookings: [Booking]) -> [Booking] {
-        bookings.sorted { $0.created > $1.created }
     }
 
     private var averageBookingsPerCourse: String {
@@ -654,18 +654,46 @@ struct OversiktView: View {
     }
 
     private func currentValue(for goal: Goal) -> Double {
+        let bookings = statisticalBookings(for: goal)
         switch goal.metric {
         case .bookingsCount:
-            Double(statisticalPeriodBookings.count)
+            return Double(bookings.count)
         case .acceptedCount:
-            Double(acceptedCount)
+            return Double(bookings.filter { $0.isAcceptedForOverview }.count)
         case .revenue:
-            totalInvoiced
+            return bookings
+                .filter(\.isAcceptedForOverview)
+                .compactMap { $0.payment?.priceAgreed }
+                .reduce(0, +)
         case .occupancy:
-            0
+            return 0
         case .newStudents:
-            Double(newStudentCount)
+            let counts = CourseMetricsEngine.countBookingsByParticipant(bookings)
+            return Double(bookings.filter {
+                CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: counts)
+            }.count)
         }
+    }
+
+    private func statisticalBookings(for goal: Goal) -> [Booking] {
+        let lookup = eventLookup
+        let all = cogWork.bookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+
+        if let eventBlockId = goal.eventBlockId, !eventBlockId.isEmpty {
+            // Hitta perioden i den kända listan för att få kodprefix-fallback via Periods.matches
+            if let period = Periods.available.first(where: { $0.eventBlockId == eventBlockId }) {
+                return all.filter { Periods.matches($0, period: period) }
+            }
+            // Okänt block-id: matcha direkt
+            return all.filter { $0.event?.grouping?.eventBlock?.id?.stringValue == eventBlockId }
+        }
+        if let eventKey = goal.eventKey, !eventKey.isEmpty {
+            return all.filter {
+                $0.event?.key == eventKey
+                    || $0.event?.id.map(String.init) == eventKey
+            }
+        }
+        return all
     }
 
     private var newStudentCount: Int {
@@ -789,6 +817,23 @@ private enum OverviewCardID: Hashable {
     case received
 }
 
+private enum BookingFilter {
+    case all, accepted, unpaid, pendingOrAwaiting, invoicedWithAmount, paid, none
+
+    nonisolated func apply(to bookings: [Booking]) -> [Booking] {
+        let sorted = bookings.sorted { $0.created > $1.created }
+        switch self {
+        case .none: return []
+        case .all: return sorted
+        case .accepted: return sorted.filter(\.isAcceptedForOverview)
+        case .unpaid: return sorted.filter { $0.payment?.paid == false }
+        case .pendingOrAwaiting: return sorted.filter { $0.isPendingReviewForOverview || $0.isAwaitingResponseForOverview }
+        case .invoicedWithAmount: return sorted.filter { $0.isAcceptedForOverview && $0.payment?.priceAgreed != nil }
+        case .paid: return sorted.filter { $0.payment?.paid == true }
+        }
+    }
+}
+
 private struct OverviewCard: Identifiable {
     let id: OverviewCardID
     let title: String
@@ -799,7 +844,7 @@ private struct OverviewCard: Identifiable {
     let style: WebKPICard.Style
     let detailTitle: String
     let detailRows: [OverviewDetailRow]
-    var bookings: [Booking] = []
+    var bookingFilter: BookingFilter = .none
 }
 
 private struct OverviewDetailRow: Identifiable {
@@ -948,7 +993,9 @@ struct WebKPICard: View {
 }
 
 private struct ExpandedKPICard: View {
+    @EnvironmentObject var cogWork: CogWorkService
     let card: OverviewCard
+    @State private var loadedBookings: [Booking] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -997,8 +1044,8 @@ private struct ExpandedKPICard: View {
             .background(Color.sdsSubtleSurface)
             .clipShape(RoundedRectangle(cornerRadius: 14))
 
-            if !card.bookings.isEmpty {
-                OverviewBookingList(bookings: card.bookings)
+            if !loadedBookings.isEmpty {
+                OverviewBookingList(bookings: loadedBookings)
             }
         }
         .padding(18)
@@ -1008,6 +1055,9 @@ private struct ExpandedKPICard: View {
                 .stroke(Color.sdsBorder, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .task(id: card.id) {
+            loadedBookings = card.bookingFilter.apply(to: cogWork.periodBookings)
+        }
     }
 }
 
@@ -1332,7 +1382,6 @@ private struct EmptyOverviewSectionCard: View {
 
 private struct CourseOverviewRow: View {
     let row: CourseOverviewData
-    let isExpanded: Bool
     let action: () -> Void
 
     var body: some View {
@@ -1365,63 +1414,12 @@ private struct CourseOverviewRow: View {
                     CourseMiniMetric(title: "Intäkt", value: row.revenueText)
                     CourseMiniMetric(title: "Obetalda", value: "\(row.unpaid)", tint: row.unpaid > 0 ? .sdsPink : .sdsDarkModeGreen)
                 }
-
-                if isExpanded {
-                    VStack(alignment: .leading, spacing: 12) {
-                        VStack(spacing: 0) {
-                            CourseDetailLine(label: "Anmälda", value: "\(row.registered)")
-                            CourseDetailLine(label: "Antagna", value: "\(row.accepted)")
-                            CourseDetailLine(label: "Betalda", value: "\(row.paid)")
-                            CourseDetailLine(label: "Obetalda", value: "\(row.unpaid)")
-                            CourseDetailLine(label: "Intäkt", value: row.fullRevenueText)
-                        }
-                        .padding(.horizontal, 14)
-                        .background(Color.sdsSubtleSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                        if !row.participants.isEmpty {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text("Deltagare")
-                                    .font(SDSType.agrandir(11, weight: .bold))
-                                    .foregroundColor(.sdsSecondaryText)
-                                    .textCase(.uppercase)
-                                    .padding(.horizontal, 14)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 4)
-
-                                ForEach(row.participants) { participant in
-                                    CourseParticipantRow(participant: participant)
-
-                                    if participant.id != row.participants.last?.id {
-                                        Rectangle()
-                                            .fill(Color.sdsBorder)
-                                            .frame(height: 1)
-                                            .padding(.leading, 14)
-                                    }
-                                }
-                            }
-                            .background(Color.sdsSubtleSurface)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                        }
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                HStack {
-                    Text(isExpanded ? "Dölj detaljer" : "Visa detaljer")
-                        .font(SDSType.agrandir(11, weight: .bold))
-                        .foregroundColor(.sdsSecondaryText)
-                    Spacer()
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.sdsSecondaryText)
-                }
             }
             .padding(16)
             .background(Color.sdsElevatedSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
-                    .stroke(isExpanded ? Color.sdsDarkModeGreen.opacity(0.42) : Color.sdsBorder, lineWidth: isExpanded ? 1.5 : 1)
+                    .stroke(Color.sdsBorder, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18))
         }
@@ -1525,6 +1523,90 @@ private struct CourseDetailLine: View {
             Rectangle()
                 .fill(Color.sdsBorder)
                 .frame(height: 1)
+        }
+    }
+}
+
+private struct CourseDetailSheet: View {
+    let course: CourseOverviewData
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SDSBadge(
+                            text: course.status.title,
+                            color: course.status.background,
+                            textColor: course.status.foreground
+                        )
+
+                        Text(course.name)
+                            .font(SDSType.agrandir(20, weight: .bold))
+                            .foregroundColor(.sdsPrimaryText)
+
+                        if !course.meta.isEmpty {
+                            Text(course.meta)
+                                .font(SDSType.agrandir(13))
+                                .foregroundColor(.sdsSecondaryText)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+
+                    VStack(spacing: 0) {
+                        CourseDetailLine(label: "Anmälda", value: "\(course.registered)")
+                        CourseDetailLine(label: "Antagna", value: "\(course.accepted)")
+                        CourseDetailLine(label: "Betalda", value: "\(course.paid)")
+                        CourseDetailLine(label: "Obetalda", value: "\(course.unpaid)")
+                        CourseDetailLine(label: "Intäkt", value: course.fullRevenueText)
+                    }
+                    .padding(.horizontal, 20)
+
+                    if !course.participants.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Deltagare")
+                                .font(SDSType.agrandir(11, weight: .bold))
+                                .foregroundColor(.sdsSecondaryText)
+                                .textCase(.uppercase)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 4)
+
+                            VStack(spacing: 0) {
+                                ForEach(course.participants) { participant in
+                                    CourseParticipantRow(participant: participant)
+
+                                    if participant.id != course.participants.last?.id {
+                                        Rectangle()
+                                            .fill(Color.sdsBorder)
+                                            .frame(height: 1)
+                                            .padding(.leading, 20)
+                                    }
+                                }
+                            }
+                            .background(Color.sdsElevatedSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.sdsBorder, lineWidth: 1)
+                            )
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                }
+                .padding(.bottom, 32)
+            }
+            .background(Color.sdsBackground)
+            .navigationTitle("Kursdetaljer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Stäng") { dismiss() }
+                        .font(SDSType.agrandir(15, weight: .bold))
+                }
+            }
         }
     }
 }
