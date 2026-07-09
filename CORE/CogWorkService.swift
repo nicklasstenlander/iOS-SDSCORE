@@ -274,25 +274,26 @@ final class CogWorkService: ObservableObject {
     }
 
     /// Medelbeläggning i procent för vald period.
-    /// Formel: summa antagna / summa maxParticipants över alla events i perioden.
+    /// Formel: summa statistics.accepted / summa maxParticipants, begränsat till events med kapacitetsgräns.
     var avgOccupancyPercent: Int? {
-        let periodEvents = statisticalPeriodEvents
-        guard !periodEvents.isEmpty else { return nil }
+        let eventsWithCapacity = statisticalPeriodEvents.filter { ($0.requirements?.maxParticipants ?? 0) > 0 }
+        guard !eventsWithCapacity.isEmpty else { return nil }
 
+        let totalMax = eventsWithCapacity.compactMap { $0.requirements?.maxParticipants }.reduce(0, +)
+        guard totalMax > 0 else { return nil }
+
+        // Fallback till bokningsräkning för events som saknar statistics.accepted
         let bookingsByEventId = Dictionary(grouping: statisticalPeriodBookings) { b -> String in
             b.event?.id.map(String.init) ?? ""
         }
-
-        var totalAccepted = 0
-        var totalMax = 0
-        for event in periodEvents {
-            let max = event.requirements?.maxParticipants ?? 0
-            if max > 0 { totalMax += max }
+        let totalAccepted = eventsWithCapacity.reduce(0) { acc, event in
+            if let accepted = event.statistics?.accepted {
+                return acc + accepted
+            }
             let eventBookings = bookingsByEventId[String(event.id)] ?? []
-            totalAccepted += eventBookings.filter(\.isAcceptedForOverview).count
+            return acc + eventBookings.filter(\.isAcceptedForOverview).count
         }
 
-        guard totalMax > 0 else { return nil }
         return Int((Double(totalAccepted) / Double(totalMax) * 100).rounded())
     }
 

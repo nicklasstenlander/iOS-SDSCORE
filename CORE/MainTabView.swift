@@ -163,6 +163,12 @@ struct MerView: View {
 
                 Section("Sidor") {
                     NavigationLink {
+                        CourseCatalogView()
+                    } label: {
+                        Label("Kurskatalog", systemImage: "book.pages")
+                    }
+
+                    NavigationLink {
                         TodayScheduleView()
                     } label: {
                         Label("Schema", systemImage: WebSection.schema.icon)

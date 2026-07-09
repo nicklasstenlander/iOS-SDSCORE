@@ -250,6 +250,7 @@ struct Event: Codable, Identifiable {
     let name: String?
     let created: String?
     let code: String?
+    let longdescription: String?
     let category: EventCategory?
     let place: String?
     let pricing: EventPricing?
@@ -569,3 +570,48 @@ extension String {
 // MARK: - Sendable conformances for background computation
 extension Booking: @unchecked Sendable {}
 extension Event: @unchecked Sendable {}
+
+// MARK: - Event computed helpers
+
+extension Event {
+    var categoryName: String {
+        grouping?.primaryEventGroup?.name ?? "Övrigt"
+    }
+
+    var ageRange: String? {
+        guard let min = requirements?.minAge else { return nil }
+        if let max = requirements?.maxAge {
+            return "\(min)–\(max) år"
+        }
+        return "Från \(min) år"
+    }
+
+    var priceFormatted: String? {
+        guard let price = pricing?.basePriceInclVat else { return nil }
+        return "\(Int(price)) \(pricing?.currency ?? "SEK")"
+    }
+
+    var occupancyPercent: Double? {
+        guard let accepted = statistics?.accepted,
+              let max = requirements?.maxParticipants,
+              max > 0 else { return nil }
+        return Double(accepted) / Double(max) * 100
+    }
+
+    var plainDescription: String? {
+        guard let html = longdescription, !html.isEmpty else { return nil }
+        var text = html
+        let entities: [(String, String)] = [
+            ("&auml;", "ä"), ("&ouml;", "ö"), ("&aring;", "å"),
+            ("&Auml;", "Ä"), ("&Ouml;", "Ö"), ("&Aring;", "Å"),
+            ("&amp;", "&"), ("&ndash;", "–"), ("&nbsp;", " "),
+            ("&ldquo;", "\u{201C}"), ("&rdquo;", "\u{201D}"),
+            ("&eacute;", "é"),
+        ]
+        for (entity, char) in entities { text = text.replacingOccurrences(of: entity, with: char) }
+        text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? nil : text
+    }
+}
