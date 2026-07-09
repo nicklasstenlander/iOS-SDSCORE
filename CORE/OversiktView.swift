@@ -13,6 +13,7 @@ struct OversiktView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var cachedCourseRows: [CourseOverviewData] = []
     @State private var isRefreshingCourseRows = false
+    @State private var goalEditorMode: GoalEditorMode?
 
     private var periods: [Period] { Periods.available }
 
@@ -248,12 +249,6 @@ struct OversiktView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.sdsPinkAdaptiveSurface)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-            } else if activeGoals.isEmpty {
-                EmptyOverviewSectionCard(
-                    icon: "target",
-                    title: "Inga aktiva mål",
-                    message: "När mål finns i dashboarden visas de här med progress och deadline."
-                )
             } else {
                 GeometryReader { proxy in
                     let cardWidth = max(260, proxy.size.width * 0.86)
@@ -261,13 +256,33 @@ struct OversiktView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(activeGoals) { goal in
-                                GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
+                                Button {
+                                    goalEditorMode = .edit(goal)
+                                } label: {
+                                    GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Ändra mål \(goal.title)")
                                     .frame(width: cardWidth)
                                     .scrollTransition(.interactive, axis: .horizontal) { content, phase in
                                         content
                                             .scaleEffect(phase.isIdentity ? 1 : 0.96)
                                             .opacity(phase.isIdentity ? 1 : 0.82)
                                     }
+                            }
+
+                            Button {
+                                goalEditorMode = .create
+                            } label: {
+                                AddGoalCard()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Skapa nytt mål")
+                            .frame(width: cardWidth)
+                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                content
+                                    .scaleEffect(phase.isIdentity ? 1 : 0.96)
+                                    .opacity(phase.isIdentity ? 1 : 0.82)
                             }
                         }
                         .scrollTargetLayout()
@@ -278,6 +293,10 @@ struct OversiktView: View {
             }
         }
         .padding(.bottom, 20)
+        .sheet(item: $goalEditorMode) { mode in
+            GoalEditorSheet(mode: mode)
+                .environmentObject(goals)
+        }
     }
 
     private var courseOverviewSection: some View {
@@ -658,9 +677,8 @@ struct OversiktView: View {
         case .occupancy:
             return 0
         case .newStudents:
-            let counts = CourseMetricsEngine.countBookingsByParticipant(bookings)
             return Double(bookings.filter {
-                CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: counts)
+                CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: bookingCountByParticipant)
             }.count)
         }
     }
@@ -1234,6 +1252,248 @@ private struct PaymentStatusBadge: View {
     }
 }
 
+private enum GoalEditorMode: Identifiable {
+    case create
+    case edit(Goal)
+
+    var id: String {
+        switch self {
+        case .create:
+            return "create"
+        case .edit(let goal):
+            return "edit-\(goal.id)"
+        }
+    }
+
+    var goal: Goal? {
+        if case .edit(let goal) = self { return goal }
+        return nil
+    }
+
+    var navigationTitle: String {
+        goal == nil ? "Nytt mål" : "Ändra mål"
+    }
+}
+
+private struct AddGoalCard: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "plus")
+                .font(.system(size: 34, weight: .bold))
+                .foregroundColor(.sdsDarkModeGreen)
+                .frame(width: 72, height: 72)
+                .background(Color.sdsLightGreenSurface)
+                .clipShape(Circle())
+
+            VStack(spacing: 5) {
+                Text("Nytt mål")
+                    .font(SDSType.agrandir(22, weight: .bold))
+                    .foregroundColor(.sdsPrimaryText)
+
+                Text("Skapa ett nytt mål för översikten")
+                    .font(SDSType.agrandir(13))
+                    .foregroundColor(.sdsSecondaryText)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 202)
+        .padding(20)
+        .background(Color.sdsSurface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(Color.sdsBorder, style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+    }
+}
+
+private struct GoalEditorSheet: View {
+    @EnvironmentObject var goals: GoalsService
+    @Environment(\.dismiss) private var dismiss
+
+    let mode: GoalEditorMode
+
+    @State private var title: String
+    @State private var description: String
+    @State private var metric: GoalMetric
+    @State private var target: String
+    @State private var selectedPeriod: Period
+    @State private var eventKey: String
+    @State private var deadline: Date
+    @State private var isSaving = false
+    @State private var validationMessage: String?
+
+    private static let deadlineFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    init(mode: GoalEditorMode) {
+        self.mode = mode
+        let goal = mode.goal
+        _title = State(initialValue: goal?.title ?? "")
+        _description = State(initialValue: goal?.description ?? "")
+        _metric = State(initialValue: goal?.metric ?? .bookingsCount)
+        _target = State(initialValue: goal.map { Self.targetString($0.target) } ?? "")
+        _selectedPeriod = State(initialValue: Self.period(for: goal))
+        _eventKey = State(initialValue: goal?.eventKey ?? "")
+        _deadline = State(initialValue: Self.date(from: goal?.deadline) ?? Date())
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Mål") {
+                    TextField("Titel", text: $title)
+                        .font(SDSType.agrandir(15))
+
+                    TextField("Beskrivning", text: $description, axis: .vertical)
+                        .font(SDSType.agrandir(15))
+                        .lineLimit(2...4)
+                }
+
+                Section("Mått") {
+                    Picker("Typ", selection: $metric) {
+                        ForEach(GoalMetric.allCases, id: \.self) { metric in
+                            Label(metric.title, systemImage: metric.icon)
+                                .tag(metric)
+                        }
+                    }
+
+                    TextField("Målvärde", text: $target)
+                        .font(SDSType.agrandir(15))
+                        .keyboardType(.decimalPad)
+                }
+
+                Section {
+                    Picker("Period", selection: $selectedPeriod) {
+                        ForEach(Periods.available) { period in
+                            Text(period.displayName).tag(period)
+                        }
+                    }
+
+                    TextField("Kursnyckel eller kurs-ID", text: $eventKey)
+                        .font(SDSType.agrandir(15))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Avgränsning")
+                } footer: {
+                    Text("Lämna kursnyckel tom för att målet ska gälla vald period. Fyll i kursnyckel eller kurs-ID för ett kursspecifikt mål.")
+                }
+
+                Section("Deadline") {
+                    DatePicker("Datum", selection: $deadline, displayedComponents: .date)
+                        .datePickerStyle(.compact)
+                }
+
+                if let validationMessage {
+                    Section {
+                        Text(validationMessage)
+                            .font(SDSType.agrandir(13, weight: .bold))
+                            .foregroundColor(.sdsPink)
+                    }
+                }
+            }
+            .font(SDSType.agrandir(15))
+            .navigationTitle(mode.navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Avbryt") { dismiss() }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("Spara")
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+    }
+
+    private var parsedTarget: Double? {
+        let normalized = target
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
+        return Double(normalized)
+    }
+
+    private func save() async {
+        validationMessage = nil
+
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else {
+            validationMessage = "Titel saknas."
+            return
+        }
+
+        guard let parsedTarget, parsedTarget > 0 else {
+            validationMessage = "Målvärdet måste vara större än 0."
+            return
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        let cleanEventKey = eventKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = CreateGoalInput(
+            title: cleanTitle,
+            description: cleanDescription.isEmpty ? nil : cleanDescription,
+            metric: metric,
+            target: parsedTarget,
+            eventBlockId: cleanEventKey.isEmpty ? selectedPeriod.eventBlockId : nil,
+            eventKey: cleanEventKey.isEmpty ? nil : cleanEventKey,
+            deadline: Self.deadlineFormatter.string(from: deadline)
+        )
+
+        let saved: Goal?
+        if let goal = mode.goal {
+            saved = await goals.updateGoal(id: goal.id, input: input)
+        } else {
+            saved = await goals.createGoal(input)
+        }
+
+        if saved != nil {
+            dismiss()
+        } else {
+            validationMessage = goals.errorMessage ?? "Kunde inte spara målet."
+        }
+    }
+
+    private static func period(for goal: Goal?) -> Period {
+        guard let goal else { return Periods.defaultPeriod() }
+        if let eventBlockId = goal.eventBlockId, !eventBlockId.isEmpty {
+            return Periods.available.first { $0.eventBlockId == eventBlockId } ?? Periods.all
+        }
+        return Periods.all
+    }
+
+    private static func date(from value: String?) -> Date? {
+        guard let value else { return nil }
+        return deadlineFormatter.date(from: value)
+    }
+
+    private static func targetString(_ value: Double) -> String {
+        if value.rounded() == value {
+            return String(Int(value))
+        }
+        return String(value).replacingOccurrences(of: ".", with: ",")
+    }
+}
+
 private struct GoalProgressCard: View {
     let goal: Goal
     let currentValue: Double
@@ -1685,6 +1945,16 @@ private enum CourseOverviewStatus {
 }
 
 private extension GoalMetric {
+    var title: String {
+        switch self {
+        case .bookingsCount: "Anmälningar"
+        case .acceptedCount: "Antagna"
+        case .revenue: "Intäkt"
+        case .occupancy: "Beläggning"
+        case .newStudents: "Nya elever"
+        }
+    }
+
     var icon: String {
         switch self {
         case .bookingsCount: "person.2"
