@@ -52,11 +52,7 @@ struct AnmalningarView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    filterScroller(periods) { period in
-                        SDSPill(title: period.displayName, isSelected: cogWork.selectedPeriod == period) {
-                            cogWork.selectedPeriod = period
-                        }
-                    }
+                    SDSPeriodPicker(periods: periods, selectedPeriod: $cogWork.selectedPeriod)
 
                     filterScroller(PaymentFilter.allCases) { filter in
                         SDSPill(title: filter.title(paid: paidCount, unpaid: unpaidCount, partial: partialCount), isSelected: paymentFilter == filter) {
@@ -368,8 +364,11 @@ struct BookingRow: View {
 struct BookingDetailSheet: View {
     let booking: Booking
     let relatedBookings: [Booking]
+    @EnvironmentObject var cogWork: CogWorkService
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) var openURL
+    @State private var customer: CogWorkUser?
+    @State private var isLoadingCustomer = false
 
     var body: some View {
         NavigationStack {
@@ -379,16 +378,27 @@ struct BookingDetailSheet: View {
                         Text("DELTAGARE")
                             .font(SDSType.agrandir(12, weight: .bold))
                             .foregroundColor(.sdsMidGreen)
-                        Text(booking.participant?.name ?? "Okänd deltagare")
+                        Text(customerName)
                             .font(SDSType.agrandir(30, weight: .bold))
                             .foregroundColor(.sdsPrimaryText)
                     }
 
                     VStack(spacing: 18) {
-                        DetailInfoRow(icon: "calendar", label: "Födelsedag", value: booking.participant?.dateOfBirth ?? "Saknas i bokningsdatan")
-                        DetailInfoRow(icon: "envelope", label: "E-post", value: "Saknas i bokningsdatan")
-                        DetailInfoRow(icon: "phone", label: "Telefon", value: "Saknas i bokningsdatan")
-                        DetailInfoRow(icon: "mappin.and.ellipse", label: "Adress", value: "Saknas i bokningsdatan")
+                        if isLoadingCustomer {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                    .tint(.sdsDarkModeGreen)
+                                Text("Hämtar kunduppgifter...")
+                                    .font(SDSType.agrandir(13, weight: .bold))
+                                    .foregroundColor(.sdsSecondaryText)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        DetailInfoRow(icon: "calendar", label: "Födelsedag", value: dateOfBirthText)
+                        DetailInfoRow(icon: "envelope", label: "E-post", value: emailText)
+                        DetailInfoRow(icon: "phone", label: "Telefon", value: phoneText)
+                        DetailInfoRow(icon: "mappin.and.ellipse", label: "Adress", value: addressText)
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -425,6 +435,9 @@ struct BookingDetailSheet: View {
                 .padding(24)
             }
             .background(Color.sdsSurface.ignoresSafeArea())
+            .task(id: booking.id) {
+                await loadCustomer()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Stäng") { dismiss() }
@@ -433,6 +446,49 @@ struct BookingDetailSheet: View {
                 }
             }
         }
+    }
+
+    private var customerName: String {
+        customer?.name?.nilIfEmpty
+            ?? [customer?.firstName, customer?.lastName]
+                .compactMap { $0?.nilIfEmpty }
+                .joined(separator: " ")
+                .nilIfEmpty
+            ?? booking.participant?.name?.nilIfEmpty
+            ?? "Okänd deltagare"
+    }
+
+    private var dateOfBirthText: String {
+        customer?.dateOfBirth?.nilIfEmpty
+            ?? booking.participant?.dateOfBirth?.nilIfEmpty
+            ?? "Saknas i bokningsdatan"
+    }
+
+    private var emailText: String {
+        customer?.emails?.compactMap { $0.email?.nilIfEmpty }.first
+            ?? "Saknas i kunddatan"
+    }
+
+    private var phoneText: String {
+        customer?.telephoneNumbers?.compactMap { $0.telephoneNumber?.nilIfEmpty }.first
+            ?? booking.participant?.telephoneNumbers?.compactMap { $0.telephoneNumber?.nilIfEmpty }.first
+            ?? "Saknas i kunddatan"
+    }
+
+    private var addressText: String {
+        customer?.addresses?.map(\.bookingDetailDisplayText).first { !$0.isEmpty }
+            ?? "Saknas i kunddatan"
+    }
+
+    private func loadCustomer() async {
+        guard !cogWork.cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let name = booking.participant?.name?.nilIfEmpty else {
+            return
+        }
+
+        isLoadingCustomer = true
+        defer { isLoadingCustomer = false }
+        customer = await cogWork.loadUser(named: name)
     }
 }
 
@@ -625,6 +681,19 @@ private extension Booking {
         formatter.dateFormat = "HH:mm"
         return formatter
     }()
+}
+
+private extension UserAddress {
+    var bookingDetailDisplayText: String {
+        [
+            careOf,
+            streetAddress,
+            [postalCode, city].compactMap { $0?.nilIfEmpty }.joined(separator: " "),
+            country == "SE" ? nil : country
+        ]
+        .compactMap { $0?.nilIfEmpty }
+        .joined(separator: "\n")
+    }
 }
 
 private extension Booking.BookingStatus {

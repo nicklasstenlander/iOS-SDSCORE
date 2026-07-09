@@ -244,6 +244,60 @@ struct SDSPill: View {
     }
 }
 
+struct SDSPeriodPicker: View {
+    let periods: [Period]
+    @Binding var selectedPeriod: Period
+    var commitDelay: Duration = .milliseconds(180)
+
+    @State private var displayedPeriod: Period?
+    @State private var commitTask: Task<Void, Never>?
+
+    private var visiblePeriod: Period {
+        displayedPeriod ?? selectedPeriod
+    }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(periods, id: \.self) { period in
+                    SDSPill(title: period.displayName, isSelected: visiblePeriod == period) {
+                        select(period)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            displayedPeriod = selectedPeriod
+        }
+        .onChange(of: selectedPeriod) { _, newValue in
+            if displayedPeriod != newValue {
+                displayedPeriod = newValue
+            }
+        }
+        .onDisappear {
+            commitTask?.cancel()
+        }
+    }
+
+    private func select(_ period: Period) {
+        guard visiblePeriod != period else { return }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            displayedPeriod = period
+        }
+
+        commitTask?.cancel()
+        commitTask = Task {
+            try? await Task.sleep(for: commitDelay)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                selectedPeriod = period
+            }
+        }
+    }
+}
+
 struct SDSBadge: View {
     let text: String
     var color: Color = .sdsLightGreen

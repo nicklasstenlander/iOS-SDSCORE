@@ -12,8 +12,8 @@ struct MainTabView: View {
             KunderView()
                 .tabItem { Label("Kunder", systemImage: "person.2") }
 
-            SamtalView()
-                .tabItem { Label("Samtal", systemImage: "phone") }
+            TodayScheduleView()
+                .tabItem { Label("Schema", systemImage: "calendar") }
 
             MerView()
                 .tabItem { Label("Mer", systemImage: "ellipsis.circle") }
@@ -163,6 +163,12 @@ struct MerView: View {
 
                 Section("Sidor") {
                     NavigationLink {
+                        TodayScheduleView()
+                    } label: {
+                        Label("Schema", systemImage: WebSection.schema.icon)
+                    }
+
+                    NavigationLink {
                         SamtalView()
                     } label: {
                         Label("Samtal", systemImage: WebSection.calls.icon)
@@ -178,12 +184,6 @@ struct MerView: View {
                         WebSectionPlaceholderView(section: .signage)
                     } label: {
                         Label("Skyltning", systemImage: WebSection.signage.icon)
-                    }
-
-                    NavigationLink {
-                        WebSectionPlaceholderView(section: .schema)
-                    } label: {
-                        Label("Schema", systemImage: WebSection.schema.icon)
                     }
 
                     NavigationLink {

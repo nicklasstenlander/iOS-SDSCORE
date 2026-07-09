@@ -171,15 +171,7 @@ struct OversiktView: View {
                 .font(SDSType.agrandir(12, weight: .bold))
                 .foregroundColor(.sdsSecondaryText)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(periods, id: \.self) { period in
-                        SDSPill(title: period.displayName, isSelected: cogWork.selectedPeriod == period) {
-                            cogWork.selectedPeriod = period
-                        }
-                    }
-                }
-            }
+            SDSPeriodPicker(periods: periods, selectedPeriod: $cogWork.selectedPeriod)
         }
     }
 
@@ -620,8 +612,7 @@ struct OversiktView: View {
                     .init(label: "Aviserat", value: "\(formattedCurrency(totalInvoiced)) kr"),
                     .init(label: "Mottaget", value: "\(formattedCurrency(totalReceived)) kr"),
                     .init(label: "Mottaget aviserat", value: "\(receivedPercent)%")
-                ],
-                bookingFilter: .invoicedWithAmount
+                ]
             ),
             OverviewCard(
                 id: .received,
@@ -635,8 +626,7 @@ struct OversiktView: View {
                     .init(label: "Mottaget", value: "\(formattedCurrency(totalReceived)) kr"),
                     .init(label: "Betalda bokningar", value: formatted(paidCount)),
                     .init(label: "Obetalda bokningar", value: formatted(unpaidCount))
-                ],
-                bookingFilter: .paid
+                ]
             )
         ]
     }
