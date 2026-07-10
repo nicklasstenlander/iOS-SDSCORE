@@ -57,7 +57,7 @@ struct HomeView: View {
                     .padding(.bottom, 28)
             }
         }
-        .background(Color.sdsBackground.ignoresSafeArea())
+        .background(Color.sdsPublicBackground.ignoresSafeArea())
         .task {
             await contentCards.loadCards()
             if cogWork.events.isEmpty {
@@ -67,29 +67,34 @@ struct HomeView: View {
     }
 
     private var heroSection: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                colors: [.sdsDarkGreen, .sdsMidGreen],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .frame(height: 300)
+        ZStack(alignment: .bottom) {
+            LoopingVideoView(filename: "Hero-film", fileExtension: "m4v")
+                .frame(height: 390)
+                .clipped()
+                .overlay(Color.white.opacity(0.16))
+                .overlay(
+                    LinearGradient(
+                        colors: [.white.opacity(0.12), .clear, .white.opacity(0.18)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Sollentuna Dans & Scenskola")
-                    .font(SDSType.agrandir(38, weight: .bold))
-                    .foregroundColor(.white)
-                    .fixedSize(horizontal: false, vertical: true)
+            Text("Kvalitet &\nDansglädje")
+                .font(SDSType.agrandir(58, variant: .wideLight))
+                .foregroundColor(.sdsAqua)
+                .multilineTextAlignment(.center)
+                .lineSpacing(0)
+                .minimumScaleFactor(0.62)
+                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 116)
 
-                Text("Kvalitet & Dansglädje")
-                    .font(SDSType.agrandir(22))
-                    .italic()
-                    .foregroundColor(.white.opacity(0.78))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 34)
+            HeroWave()
+                .fill(Color.sdsPublicBackground)
+                .frame(height: 54)
         }
-        .clipShape(.rect(bottomLeadingRadius: 30, bottomTrailingRadius: 30))
+        .frame(height: 390)
     }
 
     private var contentCardsSection: some View {
@@ -105,7 +110,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text("Från första steg till full passion.")
                     .font(SDSType.agrandir(25, weight: .bold))
-                    .foregroundColor(.sdsDarkGreen)
+                    .foregroundColor(.sdsTeal)
                 Text("Våra kurser passar både dig som är helt ny och dig som dansat länge.")
                     .font(SDSType.agrandir(15))
                     .foregroundColor(.sdsSecondaryText)
@@ -134,7 +139,7 @@ struct HomeView: View {
             } label: {
                 Label("Se alla kurser", systemImage: "arrow.right.circle")
                     .font(SDSType.agrandir(16, weight: .bold))
-                    .foregroundColor(.sdsDarkGreen)
+                    .foregroundColor(.sdsTeal)
             }
         }
     }
@@ -143,7 +148,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Hitta din nivå")
                 .font(SDSType.agrandir(25, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -151,7 +156,7 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(level.name)
                                 .font(SDSType.agrandir(17, weight: .bold))
-                                .foregroundColor(.sdsDarkGreen)
+                                .foregroundColor(.sdsTeal)
                             Text(level.description)
                                 .font(SDSType.agrandir(14))
                                 .foregroundColor(.sdsSecondaryText)
@@ -173,7 +178,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Kontakt")
                 .font(SDSType.agrandir(21, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             Label("Kuskvägen 6, 191 62 Sollentuna", systemImage: "mappin")
             Link(destination: URL(string: "mailto:info@sollentunadansochscenskola.se")!) {
@@ -219,7 +224,7 @@ private struct ContentCardView: View {
 
             Text(card.title)
                 .font(SDSType.agrandir(card.type == "banner" ? 21 : 18, weight: .bold))
-                .foregroundColor(card.type == "banner" ? .white : .sdsDarkGreen)
+                .foregroundColor(card.type == "banner" ? .white : .sdsTeal)
 
             if let body = card.body, !body.isEmpty {
                 Text(body)
@@ -235,7 +240,7 @@ private struct ContentCardView: View {
                     Label(label, systemImage: "arrow.up.right")
                         .font(SDSType.agrandir(14, weight: .bold))
                 }
-                .foregroundColor(card.type == "banner" ? .white : .sdsDarkGreen)
+                .foregroundColor(card.type == "banner" ? .white : .sdsTeal)
             }
         }
         .padding(18)
@@ -257,10 +262,10 @@ private struct FeaturedCourseCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(event.categoryName)
                 .font(SDSType.agrandir(11, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
-                .background(Color.sdsLightGreen)
+                .background(Color.sdsSubtleSurface)
                 .clipShape(Capsule())
 
             Text(event.name ?? event.categoryName)
@@ -279,7 +284,7 @@ private struct FeaturedCourseCard: View {
             Button(action: action) {
                 Text("Läs mer →")
                     .font(SDSType.agrandir(14, weight: .bold))
-                    .foregroundColor(.sdsDarkGreen)
+                    .foregroundColor(.sdsTeal)
             }
         }
         .frame(width: 250, alignment: .topLeading)
@@ -292,5 +297,21 @@ private struct FeaturedCourseCard: View {
 
     private var fallbackDescription: String {
         "En kurs med fokus på teknik, rörelseglädje och trygg utveckling i danssalen."
+    }
+}
+
+private struct HeroWave: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: rect.height * 0.48))
+        path.addCurve(
+            to: CGPoint(x: rect.width, y: rect.height * 0.10),
+            control1: CGPoint(x: rect.width * 0.34, y: rect.height * 0.95),
+            control2: CGPoint(x: rect.width * 0.68, y: -rect.height * 0.16)
+        )
+        path.addLine(to: CGPoint(x: rect.width, y: rect.height))
+        path.addLine(to: CGPoint(x: 0, y: rect.height))
+        path.closeSubpath()
+        return path
     }
 }

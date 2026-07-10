@@ -27,6 +27,8 @@ extension Color {
     static let sdsMidGreen = Color(hex: "A0C4B9")
     static let sdsPink = Color(hex: "dd5c86")
     static let sdsTeal = Color(hex: "009399")
+    static let sdsAqua = Color(hex: "45aba5")
+    static let sdsPublicBackground = Color(hex: "ffffff")
     static let sdsBackground = Color(hex: "f5f8f6")
     static let sdsCard = Color.white
     static let sdsText = Color(hex: "111111")

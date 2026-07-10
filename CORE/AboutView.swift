@@ -39,7 +39,7 @@ struct AboutView: View {
     private var heroText: some View {
         Text("Mer än bara en dansskola – en trygg och inspirerande plats där du kan utvecklas, hitta dansglädje och växa.")
             .font(SDSType.agrandir(28, weight: .bold))
-            .foregroundColor(.sdsDarkGreen)
+            .foregroundColor(.sdsTeal)
             .fixedSize(horizontal: false, vertical: true)
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -51,7 +51,7 @@ struct AboutView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sollentuna Dans & Scenskola")
                 .font(SDSType.agrandir(22, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             Text("Vi startade vår dansskola av en enkel men stark drivkraft – att skapa en plats där rörelseglädje, gemenskap och personlig utveckling får ta plats genom dans. Idén föddes ur en längtan efter att erbjuda något mer än bara lektioner.")
                 .font(SDSType.agrandir(15))
@@ -73,7 +73,7 @@ struct AboutView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Pedagogerna")
                 .font(SDSType.agrandir(22, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                 ForEach(instructors) { instructor in
@@ -92,7 +92,7 @@ struct AboutView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Hitta hit")
                 .font(SDSType.agrandir(22, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             Map(position: $mapPosition) {
                 Marker("Sollentuna Dans & Scenskola", coordinate: Self.schoolCoordinate)
@@ -110,7 +110,7 @@ struct AboutView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Kontakt")
                 .font(SDSType.agrandir(22, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .foregroundColor(.sdsTeal)
 
             Link(destination: URL(string: "tel:0850278989")!) {
                 Label("Ring oss", systemImage: "phone")
@@ -227,7 +227,7 @@ private struct InstructorDetailView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(instructor.name)
                                 .font(SDSType.agrandir(24, weight: .bold))
-                                .foregroundColor(.sdsDarkGreen)
+                                .foregroundColor(.sdsTeal)
                                 .fixedSize(horizontal: false, vertical: true)
 
                             Text(instructor.role)

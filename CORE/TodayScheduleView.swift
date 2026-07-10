@@ -86,7 +86,7 @@ struct TodayScheduleView: View {
 
             Text(formattedHeaderDate)
                 .font(SDSType.agrandir(18, weight: .bold))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
 
             Spacer()
 
@@ -105,7 +105,7 @@ struct TodayScheduleView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 36, height: 36)
                 .background(Color.sdsSurface)
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.sdsBorder, lineWidth: 1))
         }
@@ -201,7 +201,7 @@ struct TodayScheduleView: View {
                 .padding(.bottom, 4)
             Text("Inga klasser idag")
                 .font(SDSType.agrandir(18, weight: .bold))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
             if mode == .public && service.errorMessage == nil {
                 Text("Välj ett annat datum eller kika in igen senare.")
                     .font(SDSType.agrandir(14))
@@ -260,7 +260,7 @@ struct ScheduleEventCard: View {
 
             Text(event.name)
                 .font(SDSType.agrandir(16, weight: .bold))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
 
             VStack(alignment: .leading, spacing: 5) {
                 Label(event.time, systemImage: "clock")

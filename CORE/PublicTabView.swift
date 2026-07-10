@@ -32,7 +32,7 @@ struct PublicTabView: View {
                 .tabItem { Label("Mer", systemImage: "ellipsis.circle") }
                 .tag(PublicTab.more)
         }
-        .tint(.sdsDarkGreen)
+        .tint(.sdsTeal)
     }
 }
 

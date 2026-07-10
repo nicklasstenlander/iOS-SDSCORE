@@ -161,7 +161,7 @@ struct CourseCatalogView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.sdsDarkModeGreen)
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
                 TextField("Sök kurs, kategori eller lärare...", text: $searchText)
                     .font(SDSType.agrandir(14))
                     .textInputAutocapitalization(.never)
@@ -192,14 +192,14 @@ struct CourseCatalogView: View {
                         } label: {
                             Text(group.title)
                                 .font(SDSType.agrandir(13, weight: .bold))
-                                .foregroundColor(selectedAgeGroup == group ? .white : .sdsDarkModeGreen)
+                                .foregroundColor(selectedAgeGroup == group ? .white : filterAccentColor)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 7)
-                                .background(selectedAgeGroup == group ? Color.sdsDarkModeGreen : Color.clear)
+                                .background(selectedAgeGroup == group ? filterAccentColor : Color.clear)
                                 .clipShape(Capsule())
                                 .overlay(
                                     Capsule().stroke(
-                                        Color.sdsDarkModeGreen,
+                                        filterAccentColor,
                                         lineWidth: selectedAgeGroup == group ? 0 : 1
                                     )
                                 )
@@ -212,6 +212,10 @@ struct CourseCatalogView: View {
             .padding(.bottom, 8)
         }
         .background(Color.sdsPageBackground)
+    }
+
+    private var filterAccentColor: Color {
+        mode == .public ? .sdsTeal : .sdsDarkModeGreen
     }
 
     private func selectInitialEventIfNeeded() {
