@@ -282,16 +282,14 @@ final class CogWorkService: ObservableObject {
         let totalMax = eventsWithCapacity.compactMap { $0.requirements?.maxParticipants }.reduce(0, +)
         guard totalMax > 0 else { return nil }
 
-        // Fallback till bokningsräkning för events som saknar statistics.accepted
-        let bookingsByEventId = Dictionary(grouping: statisticalPeriodBookings) { b -> String in
-            b.event?.id.map(String.init) ?? ""
-        }
+        let acceptedBookings = statisticalPeriodBookings.filter(\.isAcceptedForOverview)
         let totalAccepted = eventsWithCapacity.reduce(0) { acc, event in
-            if let accepted = event.statistics?.accepted {
-                return acc + accepted
-            }
-            let eventBookings = bookingsByEventId[String(event.id)] ?? []
-            return acc + eventBookings.filter(\.isAcceptedForOverview).count
+            let eventKeys = Set([String(event.id), event.key].compactMap { $0 })
+            let accepted = acceptedBookings.filter { booking in
+                let bookingKeys = [booking.event?.id.map(String.init), booking.event?.key].compactMap { $0 }
+                return bookingKeys.contains { eventKeys.contains($0) }
+            }.count
+            return acc + (accepted > 0 ? accepted : (event.statistics?.accepted ?? 0))
         }
 
         return Int((Double(totalAccepted) / Double(totalMax) * 100).rounded())

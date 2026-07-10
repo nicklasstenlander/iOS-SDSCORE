@@ -462,10 +462,13 @@ struct OversiktView: View {
         Set(statisticalPeriodBookings.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
     }
 
-    /// Antal aktiva kurser: använder events-listan om tillgänglig, annars booking-deriverat antal.
-    private var activeCourseCount: Int {
-        let eventCount = cogWork.periodEventCount
-        return eventCount > 0 ? eventCount : uniqueCourseCount
+    private var activeStudentCount: Int {
+        let acceptedBookings = statisticalPeriodBookings.filter(\.isAcceptedForOverview)
+        let canonicalKeys = CourseMetricsEngine.canonicalParticipantKeys(for: acceptedBookings)
+
+        return Set(acceptedBookings.compactMap {
+            CourseMetricsEngine.canonicalParticipantIdentifier(for: $0, lookup: canonicalKeys)
+        }).count
     }
 
     private var paidCount: Int {
@@ -593,16 +596,16 @@ struct OversiktView: View {
             ),
             OverviewCard(
                 id: .courses,
-                title: "Kurser",
-                value: formatted(activeCourseCount),
-                subtitle: "aktiva i urvalet",
-                icon: "book.closed",
+                title: "Antal elever",
+                value: formatted(activeStudentCount),
+                subtitle: "unika med aktiv antagning",
+                icon: "person.3",
                 style: .sky,
-                detailTitle: "Kursunderlag",
+                detailTitle: "Elevunderlag",
                 detailRows: [
-                    .init(label: "Aktiva kurser", value: formatted(activeCourseCount)),
-                    .init(label: "Anmälningar/kurs", value: averageBookingsPerCourse),
-                    .init(label: "Datakälla", value: cogWork.events.isEmpty ? "CogWork bokningar" : "CogWork events")
+                    .init(label: "Unika elever", value: formatted(activeStudentCount)),
+                    .init(label: "Aktiva antagningar", value: formatted(acceptedCount)),
+                    .init(label: "Period", value: cogWork.selectedPeriod.displayName)
                 ]
             ),
             OverviewCard(
@@ -648,12 +651,6 @@ struct OversiktView: View {
                 ]
             )
         ]
-    }
-
-    private var averageBookingsPerCourse: String {
-        guard uniqueCourseCount > 0 else { return "—" }
-        let average = Double(statisticalPeriodBookings.count) / Double(uniqueCourseCount)
-        return average.formatted(.number.precision(.fractionLength(1)).locale(Locale(identifier: "sv_SE")))
     }
 
     private var activeGoals: [Goal] {
@@ -795,7 +792,10 @@ private extension OversiktView {
         let unpaid = statistical.filter { $0.payment?.paid == false }.count
         let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
         let paid = statistical.filter { $0.payment?.paid == true }.count
-        let pct = statistical.isEmpty ? 0 : Int((Double(accepted) / Double(statistical.count) * 100).rounded())
+        let maxParticipants = event?.requirements?.maxParticipants
+        let pct = maxParticipants.map { capacity in
+            capacity > 0 ? Int((Double(accepted) / Double(capacity) * 100).rounded()) : 0
+        } ?? 0
         let participants = group
             .sorted { ($0.participant?.name ?? "") < ($1.participant?.name ?? "") }
             .map { booking in
@@ -810,9 +810,12 @@ private extension OversiktView {
         let status: CourseOverviewStatus
         if unpaid > 0 { status = .attention }
         else if statistical.isEmpty { status = .neutral }
-        else {
-            let ratio = Double(accepted) / Double(statistical.count)
+        else if let maxParticipants, maxParticipants > 0 {
+            let ratio = Double(accepted) / Double(maxParticipants)
             status = ratio >= 0.85 ? .strong : (ratio <= 0.45 ? .low : .neutral)
+        }
+        else {
+            status = .neutral
         }
 
         return CourseOverviewData(
@@ -821,6 +824,7 @@ private extension OversiktView {
             meta: courseMeta(event: event, fallbackBooking: group.first),
             registered: statistical.count,
             accepted: accepted,
+            capacity: maxParticipants,
             occupancyPercent: pct,
             revenue: revenue,
             unpaid: unpaid,
@@ -1720,7 +1724,7 @@ private struct CourseOverviewRow: View {
                 }
 
                 LazyVGrid(columns: metricColumns, spacing: 8) {
-                    CourseMiniMetric(title: "Antagna", value: "\(row.accepted)/\(row.registered)")
+                    CourseMiniMetric(title: "Antagna/platser", value: row.acceptedCapacityText)
                     CourseMiniMetric(title: "Beläggning", value: "\(row.occupancyPercent)%")
                     CourseMiniMetric(title: "Intäkt", value: row.revenueText)
                     CourseMiniMetric(title: "Obetalda", value: "\(row.unpaid)", tint: row.unpaid > 0 ? .sdsPink : .sdsDarkModeGreen)
@@ -1946,6 +1950,7 @@ private struct CourseOverviewData: Identifiable {
     let meta: String
     let registered: Int
     let accepted: Int
+    let capacity: Int?
     let occupancyPercent: Int
     let revenue: Double
     let unpaid: Int
@@ -1955,6 +1960,11 @@ private struct CourseOverviewData: Identifiable {
 
     var revenueText: String {
         revenue > 0 ? "\(Int(revenue / 1000)) tkr" : "—"
+    }
+
+    var acceptedCapacityText: String {
+        guard let capacity, capacity > 0 else { return "\(accepted)/—" }
+        return "\(accepted)/\(capacity)"
     }
 
     var fullRevenueText: String {

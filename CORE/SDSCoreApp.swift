@@ -25,11 +25,11 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isLoading {
-                ProgressView()
+                LaunchScreenView()
             } else if auth.isAuthenticated {
-                MainTabView()
+                AdminTabView()
             } else {
-                LoginView()
+                PublicTabView()
             }
         }
         .task {

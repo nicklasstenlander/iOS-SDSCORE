@@ -38,6 +38,11 @@ struct CourseCatalogView: View {
     @State private var searchText = ""
     @State private var selectedAgeGroup = AgeGroupFilter.all
     @State private var selectedEvent: Event?
+    let initialSelectedEventID: Int?
+
+    init(initialSelectedEventID: Int? = nil) {
+        self.initialSelectedEventID = initialSelectedEventID
+    }
 
     private var catalogEvents: [Event] {
         cogWork.events.filter { Periods.matches($0, period: cogWork.selectedPeriod) }
@@ -81,6 +86,13 @@ struct CourseCatalogView: View {
             if cogWork.events.isEmpty {
                 await cogWork.loadAllData()
             }
+            selectInitialEventIfNeeded()
+        }
+        .onChange(of: initialSelectedEventID) { _, _ in
+            selectInitialEventIfNeeded()
+        }
+        .onChange(of: cogWork.events.count) { _, _ in
+            selectInitialEventIfNeeded()
         }
     }
 
@@ -191,6 +203,16 @@ struct CourseCatalogView: View {
             .padding(.bottom, 8)
         }
         .background(Color.sdsPageBackground)
+    }
+
+    private func selectInitialEventIfNeeded() {
+        guard let initialSelectedEventID,
+              selectedEvent?.id != initialSelectedEventID,
+              let event = cogWork.events.first(where: { $0.id == initialSelectedEventID }) else {
+            return
+        }
+
+        selectedEvent = event
     }
 }
 

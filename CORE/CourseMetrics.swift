@@ -206,6 +206,10 @@ enum CourseMetricsEngine {
         return canonicalKeyOf
     }
 
+    nonisolated static func canonicalParticipantIdentifier(for booking: Booking, lookup: [String: String]) -> String? {
+        canonicalParticipantKey(for: booking, lookup: lookup)
+    }
+
     nonisolated static func bookingTicketQuantity(_ booking: Booking) -> Int {
         if let structuredQuantity = ticketQuantityFromFormResponses(booking) {
             return structuredQuantity

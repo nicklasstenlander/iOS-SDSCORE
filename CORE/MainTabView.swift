@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct MainTabView: View {
+struct AdminTabView: View {
     var body: some View {
         TabView {
             OversiktView()
@@ -239,6 +239,14 @@ struct MerView: View {
 
                 Section {
                     Button {
+                        auth.signOut()
+                    } label: {
+                        Label("Visa publik vy", systemImage: "eye")
+                    }
+                }
+
+                Section {
+                    Button {
                         Task { await updateCallDirectory() }
                     } label: {
                         HStack {
@@ -418,7 +426,7 @@ struct CogWorkAPISettingsSheet: View {
 }
 
 #Preview {
-    MainTabView()
+    AdminTabView()
         .environmentObject(SupabaseAuthService())
         .environmentObject(CogWorkService())
         .environmentObject(GoalsService())
