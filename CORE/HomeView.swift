@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @EnvironmentObject private var cogWork: CogWorkService
@@ -80,6 +81,8 @@ struct HomeView: View {
                     )
                 )
 
+            heroTopBar
+
             Text("Kvalitet &\nDansglädje")
                 .font(SDSType.agrandir(58, variant: .wideLight))
                 .foregroundColor(.sdsAqua)
@@ -95,6 +98,29 @@ struct HomeView: View {
                 .frame(height: 54)
         }
         .frame(height: 390)
+    }
+
+    private var heroTopBar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                BundleImage(filename: "SDS Dancer Three Lines Black", fileExtension: "png")
+                    .scaledToFit()
+                    .frame(width: 184)
+                    .accessibilityLabel("Sollentuna Dans & Scenskola")
+
+                Spacer()
+            }
+            .padding(.horizontal, 22)
+            .frame(height: 86)
+            .background(Color.white.opacity(0.92))
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color.sdsBorder)
+                    .frame(height: 1)
+            }
+
+            Spacer()
+        }
     }
 
     private var contentCardsSection: some View {
@@ -313,5 +339,20 @@ private struct HeroWave: Shape {
         path.addLine(to: CGPoint(x: 0, y: rect.height))
         path.closeSubpath()
         return path
+    }
+}
+
+private struct BundleImage: View {
+    let filename: String
+    let fileExtension: String
+
+    var body: some View {
+        if let path = Bundle.main.path(forResource: filename, ofType: fileExtension),
+           let image = UIImage(contentsOfFile: path) {
+            Image(uiImage: image)
+                .resizable()
+        } else {
+            Color.clear
+        }
     }
 }

@@ -24,6 +24,10 @@ struct PublicTabView: View {
             .tabItem { Label("Kurser", systemImage: "sparkles") }
             .tag(PublicTab.courses)
 
+            AboutView()
+                .tabItem { Label("Om oss", systemImage: "info.circle") }
+                .tag(PublicTab.about)
+
             TodayScheduleView(mode: .public)
                 .tabItem { Label("Schema", systemImage: "calendar") }
                 .tag(PublicTab.schedule)
@@ -39,6 +43,7 @@ struct PublicTabView: View {
 private enum PublicTab: Hashable {
     case home
     case courses
+    case about
     case schedule
     case more
 }
