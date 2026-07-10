@@ -756,61 +756,122 @@ private extension OversiktView {
             currentPeriodCode: period.codePrefix,
             eventLookup: lookup
         )
+        let periodEvents = events
+            .filter { Periods.matches($0, period: period) && CourseMetricsEngine.isStatisticalEvent($0) }
         let periodBookings = bookings.filter { Periods.matches($0, period: period) }
         let grouped = Dictionary(grouping: periodBookings) { booking in
-            booking.event?.id.map(String.init) ?? booking.event?.name ?? booking.key
+            courseKey(for: booking, lookup: lookup)
         }
 
-        return grouped.compactMap { key, group in
-            guard let first = group.first else { return nil }
-            let statistical = group.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
-            let accepted = statistical.filter(\.isAcceptedForOverview).count
-            let unpaid = statistical.filter { $0.payment?.paid == false }.count
-            let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
-            let paid = statistical.filter { $0.payment?.paid == true }.count
-            let pct = statistical.isEmpty ? 0 : Int((Double(accepted) / Double(statistical.count) * 100).rounded())
-            let participants = group
-                .sorted { ($0.participant?.name ?? "") < ($1.participant?.name ?? "") }
-                .map { b in
-                    CourseParticipantData(
-                        booking: b,
-                        isNewStudent: CourseMetricsEngine.isNewStudentBooking(b, countByParticipant: counts),
-                        courseChange: CourseMetricsEngine.courseChange(for: b, changesByParticipant: courseChanges),
-                        isTicketPurchase: CourseMetricsEngine.isPerformance(booking: b, eventLookup: lookup)
-                    )
+        let eventRows = periodEvents.map { event in
+            let key = String(event.id)
+            let group = grouped[key] ?? event.key.flatMap { grouped[$0] } ?? []
+            return courseRow(key: key, event: event, bookings: group, counts: counts, courseChanges: courseChanges, lookup: lookup)
+        }
+
+        let eventKeys = Set(periodEvents.flatMap { event -> [String] in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty { keys.append(key) }
+            return keys
+        })
+        let fallbackRows = grouped.compactMap { key, group -> CourseOverviewData? in
+            guard !eventKeys.contains(key), !group.isEmpty else { return nil }
+            return courseRow(key: key, event: nil, bookings: group, counts: counts, courseChanges: courseChanges, lookup: lookup)
+        }
+
+        return eventRows + fallbackRows
+    }
+
+    private nonisolated static func courseRow(
+        key: String,
+        event: Event?,
+        bookings group: [Booking],
+        counts: [String: Int],
+        courseChanges: [String: ParticipantCourseChange],
+        lookup: [String: Event]
+    ) -> CourseOverviewData {
+        let statistical = group.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+        let accepted = statistical.filter(\.isAcceptedForOverview).count
+        let unpaid = statistical.filter { $0.payment?.paid == false }.count
+        let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
+        let paid = statistical.filter { $0.payment?.paid == true }.count
+        let pct = statistical.isEmpty ? 0 : Int((Double(accepted) / Double(statistical.count) * 100).rounded())
+        let participants = group
+            .sorted { ($0.participant?.name ?? "") < ($1.participant?.name ?? "") }
+            .map { booking in
+                CourseParticipantData(
+                    booking: booking,
+                    isNewStudent: CourseMetricsEngine.isNewStudentBooking(booking, countByParticipant: counts),
+                    courseChange: CourseMetricsEngine.courseChange(for: booking, changesByParticipant: courseChanges),
+                    isTicketPurchase: CourseMetricsEngine.isPerformance(booking: booking, eventLookup: lookup)
+                )
+            }
+
+        let status: CourseOverviewStatus
+        if unpaid > 0 { status = .attention }
+        else if statistical.isEmpty { status = .neutral }
+        else {
+            let ratio = Double(accepted) / Double(statistical.count)
+            status = ratio >= 0.85 ? .strong : (ratio <= 0.45 ? .low : .neutral)
+        }
+
+        return CourseOverviewData(
+            id: key,
+            name: event?.name ?? group.first?.event?.name ?? "Okänd kurs",
+            meta: courseMeta(event: event, fallbackBooking: group.first),
+            registered: statistical.count,
+            accepted: accepted,
+            occupancyPercent: pct,
+            revenue: revenue,
+            unpaid: unpaid,
+            paid: paid,
+            participants: participants,
+            status: status
+        )
+    }
+
+    private nonisolated static func courseKey(for booking: Booking, lookup: [String: Event]) -> String {
+        if let id = booking.event?.id {
+            return String(id)
+        }
+
+        if let key = booking.event?.key, !key.isEmpty {
+            return lookup[key].map { String($0.id) } ?? key
+        }
+
+        return booking.event?.name ?? booking.key
+    }
+
+    private nonisolated static func courseMeta(event: Event?, fallbackBooking: Booking?) -> String {
+        if let event {
+            let blockLabel = event.grouping?.eventBlock?.name.map(Periods.blockNameToFullLabel)
+            let periodLabel = compactPeriodLabel(blockLabel)
+            let startParts = [event.schedule?.start?.date, event.schedule?.start?.time]
+                .compactMap { value -> String? in
+                    guard let value, !value.isEmpty else { return nil }
+                    return value
                 }
-
-            let status: CourseOverviewStatus
-            if unpaid > 0 { status = .attention }
-            else if statistical.isEmpty { status = .neutral }
-            else {
-                let ratio = Double(accepted) / Double(statistical.count)
-                status = ratio >= 0.85 ? .strong : (ratio <= 0.45 ? .low : .neutral)
-            }
-
-            let periodLabel = first.overviewPeriodLabel.map {
-                $0.replacingOccurrences(of: "Höstterminen ", with: "HT")
-                    .replacingOccurrences(of: "Vårterminen ", with: "VT")
-            }
-            let startParts = [first.event?.startDate, first.event?.startTime]
-                .compactMap { v -> String? in guard let v, !v.isEmpty else { return nil }; return v }
-            let meta = ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
-                .compactMap { $0 }.joined(separator: " · ")
-
-            return CourseOverviewData(
-                id: key,
-                name: first.event?.name ?? "Okänd kurs",
-                meta: meta,
-                registered: statistical.count,
-                accepted: accepted,
-                occupancyPercent: pct,
-                revenue: revenue,
-                unpaid: unpaid,
-                paid: paid,
-                participants: participants,
-                status: status
-            )
+            return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+                .compactMap { $0 }
+                .joined(separator: " · ")
         }
+
+        guard let fallbackBooking else { return "" }
+        let periodLabel = compactPeriodLabel(fallbackBooking.overviewPeriodLabel)
+        let startParts = [fallbackBooking.event?.startDate, fallbackBooking.event?.startTime]
+            .compactMap { value -> String? in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+        return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    private nonisolated static func compactPeriodLabel(_ value: String?) -> String? {
+        value?
+            .replacingOccurrences(of: "Höstterminen ", with: "HT")
+            .replacingOccurrences(of: "Vårterminen ", with: "VT")
     }
 }
 
