@@ -1,9 +1,19 @@
 import SwiftUI
 
 struct TodayScheduleView: View {
+    enum Mode {
+        case admin
+        case `public`
+    }
+
+    let mode: Mode
     @StateObject private var service = ScheduleService()
     @State private var isShowingDatePicker = false
     @State private var pickerDate = Date()
+
+    init(mode: Mode = .admin) {
+        self.mode = mode
+    }
 
     private static let headerFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -37,7 +47,7 @@ struct TodayScheduleView: View {
                 }
             }
             .background(Color.sdsPageBackground.ignoresSafeArea())
-            .navigationTitle("Schema")
+            .navigationTitle(mode == .public ? "Dagens schema" : "Schema")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -161,7 +171,8 @@ struct TodayScheduleView: View {
                 ScheduleEventCard(
                     event: event,
                     isOngoing: service.ongoingEvent?.id == event.id,
-                    isNext: service.ongoingEvent == nil && service.nextEvent?.id == event.id
+                    isNext: service.ongoingEvent == nil && service.nextEvent?.id == event.id,
+                    mode: mode
                 )
             }
         }
@@ -191,6 +202,13 @@ struct TodayScheduleView: View {
             Text("Inga klasser idag")
                 .font(SDSType.agrandir(18, weight: .bold))
                 .foregroundColor(.sdsDarkModeGreen)
+            if mode == .public && service.errorMessage == nil {
+                Text("Välj ett annat datum eller kika in igen senare.")
+                    .font(SDSType.agrandir(14))
+                    .foregroundColor(.sdsMutedText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
             if let error = service.errorMessage {
                 Text(error)
                     .font(SDSType.agrandir(14))
@@ -226,16 +244,17 @@ struct ScheduleEventCard: View {
     let event: ScheduleEvent
     let isOngoing: Bool
     let isNext: Bool
+    let mode: TodayScheduleView.Mode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if isOngoing {
+            if mode == .admin && isOngoing {
                 SDSBadge(
                     text: "Pågår nu",
                     color: .sdsDarkModeGreen,
                     textColor: Color.adaptive(light: "ffffff", dark: "1e4025")
                 )
-            } else if isNext {
+            } else if mode == .admin && isNext {
                 SDSBadge(text: "Nästa", color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
             }
 
@@ -274,14 +293,14 @@ struct ScheduleEventCard: View {
     }
 
     private var cardBackground: Color {
-        if isOngoing { return .sdsLightGreenSurface }
-        if isNext    { return Color.sdsLightGreenSurface.opacity(0.62) }
+        if mode == .admin && isOngoing { return .sdsLightGreenSurface }
+        if mode == .admin && isNext    { return Color.sdsLightGreenSurface.opacity(0.62) }
         return .sdsSurface
     }
 
     private var cardBorder: Color {
-        if isOngoing { return Color.sdsDarkGreen.opacity(0.25) }
-        if isNext    { return .sdsLightGreen }
+        if mode == .admin && isOngoing { return Color.sdsDarkGreen.opacity(0.25) }
+        if mode == .admin && isNext    { return .sdsLightGreen }
         return .sdsBorder
     }
 }

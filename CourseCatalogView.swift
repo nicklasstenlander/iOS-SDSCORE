@@ -34,13 +34,20 @@ enum AgeGroupFilter: CaseIterable, Identifiable {
 // MARK: - Course Catalog View
 
 struct CourseCatalogView: View {
+    enum Mode {
+        case admin
+        case `public`
+    }
+
     @EnvironmentObject var cogWork: CogWorkService
     @State private var searchText = ""
     @State private var selectedAgeGroup = AgeGroupFilter.all
     @State private var selectedEvent: Event?
+    let mode: Mode
     let initialSelectedEventID: Int?
 
-    init(initialSelectedEventID: Int? = nil) {
+    init(mode: Mode = .admin, initialSelectedEventID: Int? = nil) {
+        self.mode = mode
         self.initialSelectedEventID = initialSelectedEventID
     }
 
@@ -75,10 +82,10 @@ struct CourseCatalogView: View {
             contentArea
         }
         .background(Color.sdsPageBackground.ignoresSafeArea())
-        .navigationTitle("Kurskatalog")
+        .navigationTitle(mode == .public ? "Kurser" : "Kurskatalog")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $selectedEvent) { event in
-            CourseCatalogDetailSheet(event: event)
+            CourseCatalogDetailSheet(event: event, mode: mode)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -103,7 +110,9 @@ struct CourseCatalogView: View {
         } else if catalogEvents.isEmpty {
             catalogEmptyState(
                 icon: "book.closed",
-                text: "Kurskatalogen fylls när kurser är laddade för vald period."
+                text: mode == .public
+                    ? "Kurserna laddas in så snart terminsutbudet är klart."
+                    : "Kurskatalogen fylls när kurser är laddade för vald period."
             )
         } else if groupedEvents.isEmpty {
             catalogEmptyState(icon: "magnifyingglass", text: "Inga kurser matchar sökningen.")
@@ -115,7 +124,7 @@ struct CourseCatalogView: View {
                             Button {
                                 selectedEvent = event
                             } label: {
-                                CatalogCourseRow(event: event)
+                                CatalogCourseRow(event: event, mode: mode)
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(Color.sdsCard)
@@ -220,6 +229,7 @@ struct CourseCatalogView: View {
 
 private struct CatalogCourseRow: View {
     let event: Event
+    let mode: CourseCatalogView.Mode
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -255,15 +265,17 @@ private struct CatalogCourseRow: View {
                         .font(SDSType.agrandir(14, weight: .bold))
                         .foregroundColor(.sdsPrimaryText)
                 }
-                if let accepted = event.statistics?.accepted,
-                   let max = event.requirements?.maxParticipants {
-                    Text("\(accepted)/\(max)")
-                        .font(SDSType.agrandir(12))
-                        .foregroundColor(accepted >= max ? .sdsPink : .sdsSecondaryText)
-                } else if let accepted = event.statistics?.accepted {
-                    Text("\(accepted) anm.")
-                        .font(SDSType.agrandir(12))
-                        .foregroundColor(.sdsSecondaryText)
+                if mode == .admin {
+                    if let accepted = event.statistics?.accepted,
+                       let max = event.requirements?.maxParticipants {
+                        Text("\(accepted)/\(max)")
+                            .font(SDSType.agrandir(12))
+                            .foregroundColor(accepted >= max ? .sdsPink : .sdsSecondaryText)
+                    } else if let accepted = event.statistics?.accepted {
+                        Text("\(accepted) anm.")
+                            .font(SDSType.agrandir(12))
+                            .foregroundColor(.sdsSecondaryText)
+                    }
                 }
             }
         }
@@ -289,6 +301,7 @@ private struct CatalogAgePill: View {
 
 struct CourseCatalogDetailSheet: View {
     let event: Event
+    let mode: CourseCatalogView.Mode
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -387,7 +400,9 @@ struct CourseCatalogDetailSheet: View {
                 CatalogDetailRow(icon: "figure.child", label: "Ålder", value: age)
                 Divider().padding(.leading, 52)
             }
-            occupancyRow
+            if mode == .admin {
+                occupancyRow
+            }
         }
         .background(Color.sdsCard)
         .clipShape(RoundedRectangle(cornerRadius: 16))

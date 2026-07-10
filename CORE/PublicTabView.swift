@@ -19,12 +19,12 @@ struct PublicTabView: View {
             .tag(PublicTab.home)
 
             NavigationStack {
-                CourseCatalogView(initialSelectedEventID: selectedCourseID)
+                CourseCatalogView(mode: .public, initialSelectedEventID: selectedCourseID)
             }
             .tabItem { Label("Kurser", systemImage: "sparkles") }
             .tag(PublicTab.courses)
 
-            TodayScheduleView()
+            TodayScheduleView(mode: .public)
                 .tabItem { Label("Schema", systemImage: "calendar") }
                 .tag(PublicTab.schedule)
 
