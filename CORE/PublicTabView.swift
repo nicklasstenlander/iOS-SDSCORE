@@ -50,6 +50,8 @@ private enum PublicTab: Hashable {
 
 struct PublicMerView: View {
     @State private var showLogin = false
+    private let mapsURL = URL(string: "http://maps.apple.com/?q=Sollentuna%20Dans%20%26%20Scenskola&address=Kuskv%C3%A4gen%206%2C%20191%2062%20Sollentuna&ll=59.4290,17.9465")!
+    private let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     var body: some View {
         NavigationStack {
@@ -72,10 +74,15 @@ struct PublicMerView: View {
                     Link(destination: URL(string: "https://instagram.com/sollentunadansochscenskola")!) {
                         Label("Instagram", systemImage: "camera")
                     }
+                    Link(destination: websiteURL) {
+                        Label("Hemsida", systemImage: "safari")
+                    }
                 }
 
                 Section("Hitta hit") {
-                    Label("Kuskvägen 6, 191 62 Sollentuna", systemImage: "mappin")
+                    Link(destination: mapsURL) {
+                        Label("Kuskvägen 6, 191 62 Sollentuna", systemImage: "mappin")
+                    }
                     Text("Mån–Fre 15:30–21:30\nLör 9:00–14:00\nSön 9:00–13:00")
                         .font(.subheadline)
                         .foregroundColor(.gray)
@@ -96,4 +103,16 @@ struct PublicMerView: View {
             }
         }
     }
+}
+
+#Preview("PublicTabView") {
+    PublicTabView()
+        .environmentObject(CogWorkService())
+        .environmentObject(SupabaseAuthService())
+}
+
+#Preview("PublicMerView") {
+    PublicMerView()
+        .environmentObject(CogWorkService())
+        .environmentObject(SupabaseAuthService())
 }

@@ -356,3 +356,11 @@ private struct BundleImage: View {
         }
     }
 }
+
+#Preview {
+    HomeView(
+        onShowAllCourses: {},
+        onOpenCourse: { _ in }
+    )
+    .environmentObject(CogWorkService())
+}

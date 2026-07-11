@@ -127,7 +127,7 @@ struct CourseCatalogView: View {
                                 CatalogCourseRow(event: event, mode: mode)
                             }
                             .buttonStyle(.plain)
-                            .listRowBackground(Color.sdsCard)
+                            .listRowBackground(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsCard)
                         }
                     } header: {
                         Text(group.category)
@@ -178,8 +178,8 @@ struct CourseCatalogView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(Color.sdsSubtleSurface)
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.sdsBorder, lineWidth: 1))
+            .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsSubtleSurface)
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(mode == .public ? Color.sdsPublicBorder : Color.sdsBorder, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -307,7 +307,7 @@ struct CourseCatalogDetailSheet: View {
     let event: Event
     let mode: CourseCatalogView.Mode
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
+    @State private var showBookingSafari = false
 
     private var bookingURL: URL? {
         URL(string: "https://dans.se/sollentunadans/shop/new?event=\(event.id)")
@@ -333,21 +333,21 @@ struct CourseCatalogDetailSheet: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                if let url = bookingURL {
+                if bookingURL != nil {
                     VStack(spacing: 0) {
                         Divider()
                         Button {
-                            openURL(url)
+                            showBookingSafari = true
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "safari")
+                                Image(systemName: "globe")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text("Boka i Safari")
+                                Text("Boka plats")
                                     .font(SDSType.agrandir(17, weight: .bold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(Color.sdsDarkGreen)
+                            .background(mode == .public ? Color.sdsTeal : Color.sdsDarkGreen)
                             .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .padding(.horizontal, 20)
@@ -355,6 +355,12 @@ struct CourseCatalogDetailSheet: View {
                         }
                         .background(Color.sdsPageBackground)
                     }
+                }
+            }
+            .sheet(isPresented: $showBookingSafari) {
+                if let url = bookingURL {
+                    SafariView(url: url)
+                        .ignoresSafeArea()
                 }
             }
         }
@@ -408,9 +414,9 @@ struct CourseCatalogDetailSheet: View {
                 occupancyRow
             }
         }
-        .background(Color.sdsCard)
+        .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsCard)
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.sdsBorder, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(mode == .public ? Color.sdsPublicBorder : Color.sdsBorder, lineWidth: 1))
     }
 
     @ViewBuilder
@@ -474,4 +480,18 @@ private struct CatalogDetailRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
+}
+
+#Preview("CourseCatalogView Public") {
+    NavigationStack {
+        CourseCatalogView(mode: .public)
+    }
+    .environmentObject(CogWorkService())
+}
+
+#Preview("CourseCatalogView Admin") {
+    NavigationStack {
+        CourseCatalogView()
+    }
+    .environmentObject(CogWorkService())
 }

@@ -54,7 +54,9 @@ struct OversiktView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 filters
-                goalsSection
+                if auth.isAdmin {
+                    goalsSection
+                }
                 overviewKPIs
                 courseOverviewSection
 
@@ -532,7 +534,7 @@ struct OversiktView: View {
     }
 
     private var overviewCards: [OverviewCard] {
-        [
+        let cards: [OverviewCard] = [
             OverviewCard(
                 id: .registered,
                 title: "Anmälda",
@@ -651,6 +653,7 @@ struct OversiktView: View {
                 ]
             )
         ]
+        return auth.canSeeFinancials ? cards : cards.filter { $0.id != .invoiced && $0.id != .received }
     }
 
     private var activeGoals: [Goal] {

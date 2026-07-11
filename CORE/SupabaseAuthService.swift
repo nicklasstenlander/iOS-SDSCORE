@@ -286,3 +286,15 @@ private enum AuthSessionError: Error {
     case refreshFailed
     case unauthorized
 }
+
+// MARK: - Rollbaserade rättigheter
+
+extension SupabaseAuthService {
+    var isAdmin: Bool {
+        profile?.role == "admin"
+    }
+
+    var canSeeFinancials: Bool {
+        profile?.role == "admin"
+    }
+}

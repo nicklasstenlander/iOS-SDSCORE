@@ -122,7 +122,7 @@ struct TodayScheduleView: View {
                 DatePicker("Välj datum", selection: $pickerDate, displayedComponents: .date)
                     .datePickerStyle(.graphical)
                     .labelsHidden()
-                    .tint(.sdsDarkModeGreen)
+                    .tint(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
 
                 Button {
                     pickerDate = Date()
@@ -131,8 +131,8 @@ struct TodayScheduleView: View {
                         .font(SDSType.agrandir(15, weight: .bold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.sdsLightGreenSurface)
-                        .foregroundColor(.sdsDarkModeGreen)
+                        .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsLightGreenSurface)
+                        .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -184,7 +184,7 @@ struct TodayScheduleView: View {
 
     private var loadingPlaceholder: some View {
         VStack(spacing: 14) {
-            ProgressView().tint(.sdsDarkModeGreen)
+            ProgressView().tint(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
             Text("Hämtar schema…")
                 .font(SDSType.agrandir(15))
                 .foregroundColor(.sdsMutedText)
@@ -293,6 +293,7 @@ struct ScheduleEventCard: View {
     }
 
     private var cardBackground: Color {
+        if mode == .public { return .sdsPublicSubtleSurface }
         if mode == .admin && isOngoing { return .sdsLightGreenSurface }
         if mode == .admin && isNext    { return Color.sdsLightGreenSurface.opacity(0.62) }
         return .sdsSurface
@@ -301,7 +302,7 @@ struct ScheduleEventCard: View {
     private var cardBorder: Color {
         if mode == .admin && isOngoing { return Color.sdsDarkGreen.opacity(0.25) }
         if mode == .admin && isNext    { return .sdsLightGreen }
-        return .sdsBorder
+        return mode == .public ? .sdsPublicBorder : .sdsBorder
     }
 }
 

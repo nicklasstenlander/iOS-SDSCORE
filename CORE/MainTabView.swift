@@ -192,10 +192,12 @@ struct MerView: View {
                         Label("Skyltning", systemImage: WebSection.signage.icon)
                     }
 
-                    NavigationLink {
-                        FormBuilderView()
-                    } label: {
-                        Label("Formulär", systemImage: WebSection.forms.icon)
+                    if auth.isAdmin {
+                        NavigationLink {
+                            FormBuilderView()
+                        } label: {
+                            Label("Formulär", systemImage: WebSection.forms.icon)
+                        }
                     }
 
                     NavigationLink {

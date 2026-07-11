@@ -3,6 +3,8 @@ import MapKit
 
 struct AboutView: View {
     private static let schoolCoordinate = CLLocationCoordinate2D(latitude: 59.4290, longitude: 17.9465)
+    private static let mapsURL = URL(string: "http://maps.apple.com/?q=Sollentuna%20Dans%20%26%20Scenskola&address=Kuskv%C3%A4gen%206%2C%20191%2062%20Sollentuna&ll=59.4290,17.9465")!
+    private static let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     @State private var mapPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
@@ -26,7 +28,7 @@ struct AboutView: View {
             .padding(20)
             .padding(.bottom, 20)
         }
-        .background(Color.sdsBackground.ignoresSafeArea())
+        .background(Color.sdsPublicBackground.ignoresSafeArea())
         .navigationTitle("Om skolan")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $selectedInstructor) { instructor in
@@ -43,8 +45,8 @@ struct AboutView: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.sdsLightGreenSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .background(Color.sdsPublicBackground)
+            .overlay(Rectangle().fill(Color.sdsPublicBorder).frame(height: 1), alignment: .bottom)
     }
 
     private var aboutSection: some View {
@@ -65,8 +67,7 @@ struct AboutView: View {
         }
         .padding(18)
         .background(Color.sdsCard)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.sdsBorder, lineWidth: 1))
+        .overlay(Rectangle().fill(Color.sdsPublicBorder).frame(height: 1), alignment: .bottom)
     }
 
     private var instructorsSection: some View {
@@ -75,7 +76,7 @@ struct AboutView: View {
                 .font(SDSType.agrandir(22, weight: .bold))
                 .foregroundColor(.sdsTeal)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 20)], spacing: 22) {
                 ForEach(instructors) { instructor in
                     Button {
                         selectedInstructor = instructor
@@ -103,6 +104,16 @@ struct AboutView: View {
             Label("Kuskvägen 6, 191 62 Sollentuna", systemImage: "mappin")
                 .font(SDSType.agrandir(14))
                 .foregroundColor(.sdsPrimaryText)
+
+            Link(destination: Self.mapsURL) {
+                Label("Öppna i Apple Maps", systemImage: "map")
+                    .font(SDSType.agrandir(15, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.sdsPublicSubtleSurface)
+                    .foregroundColor(.sdsTeal)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
     }
 
@@ -124,6 +135,10 @@ struct AboutView: View {
                 Label("Instagram", systemImage: "camera")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            Link(destination: Self.websiteURL) {
+                Label("Hemsida", systemImage: "safari")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             Divider()
 
@@ -133,7 +148,7 @@ struct AboutView: View {
                 .foregroundColor(.sdsMutedText)
         }
         .font(SDSType.agrandir(15))
-        .foregroundColor(.sdsDarkGreen)
+        .foregroundColor(.sdsTeal)
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.sdsCard)
@@ -188,7 +203,7 @@ private struct InstructorCard: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            InstructorPortrait(instructor: instructor, size: 92)
+            InstructorPortrait(instructor: instructor, size: 136)
 
             VStack(spacing: 3) {
                 Text(instructor.name)
@@ -205,11 +220,8 @@ private struct InstructorCard: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .frame(minHeight: 168, alignment: .top)
-        .padding(12)
-        .background(instructor.isRecruitment ? Color.sdsLightGreenSurface : Color.sdsCard)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.sdsBorder, lineWidth: 1))
+        .frame(minHeight: 210, alignment: .top)
+        .padding(.vertical, 6)
     }
 }
 
@@ -255,7 +267,7 @@ private struct InstructorDetailView: View {
                 }
                 .padding(20)
             }
-            .background(Color.sdsBackground.ignoresSafeArea())
+            .background(Color.sdsPublicBackground.ignoresSafeArea())
             .navigationTitle("Pedagog")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -290,18 +302,25 @@ private struct InstructorPortrait: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.sdsLightGreen, lineWidth: 2))
+        .saturation(instructor.isRecruitment ? 1 : 0)
+        .overlay(Circle().stroke(Color.sdsPublicBorder, lineWidth: 1))
     }
 
     private var placeholder: some View {
         ZStack {
             Circle()
-                .fill(instructor.isRecruitment ? Color.sdsPinkSurface : Color.sdsMidGreen)
-            Text(instructor.isRecruitment ? "?" : String(instructor.name.prefix(1)))
-                .font(SDSType.agrandir(size * 0.34, weight: .bold))
-                .foregroundColor(.sdsDarkGreen)
+                .fill(instructor.isRecruitment ? Color.black : Color.sdsPublicSubtleSurface)
+            Text(instructor.isRecruitment ? "Är detta\ndu?" : String(instructor.name.prefix(1)))
+                .font(SDSType.agrandir(instructor.isRecruitment ? size * 0.16 : size * 0.34, weight: .bold))
+                .foregroundColor(instructor.isRecruitment ? .white : .sdsTeal)
                 .multilineTextAlignment(.center)
                 .padding(8)
         }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        AboutView()
     }
 }

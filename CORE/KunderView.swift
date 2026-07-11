@@ -564,3 +564,8 @@ private extension UserAddress {
         .joined(separator: "\n")
     }
 }
+
+#Preview {
+    KunderView()
+        .environmentObject(CogWorkService())
+}

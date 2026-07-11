@@ -49,6 +49,8 @@ extension Color {
     static let sdsBorder = Color.adaptive(light: "e6eee9", dark: "2a2a2a")
     static let sdsInputBackground = Color.adaptive(light: "ffffff", dark: "1f1f1f")
     static let sdsSubtleSurface = Color.adaptive(light: "f8fafc", dark: "171717")
+    static let sdsPublicSubtleSurface = Color(hex: "f9f9f9")
+    static let sdsPublicBorder = Color(hex: "eeeeee")
     static let sdsIconBackground = Color.adaptive(light: "ffffff", dark: "2a2a2a").opacity(0.72)
     static let sdsDarkModeGreen = Color.adaptive(light: "1e4025", dark: "A0C4B9")
     static let sdsLightGreenSurface = Color.adaptive(light: "CDDCD1", dark: "1f2f25")
