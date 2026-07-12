@@ -198,6 +198,12 @@ struct MerView: View {
                         } label: {
                             Label("Formulär", systemImage: WebSection.forms.icon)
                         }
+
+                        NavigationLink {
+                            ContentCardsAdminView()
+                        } label: {
+                            Label("Nyheter", systemImage: "megaphone")
+                        }
                     }
 
                     NavigationLink {
