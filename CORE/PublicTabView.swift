@@ -50,7 +50,8 @@ private enum PublicTab: Hashable {
 
 struct PublicMerView: View {
     @State private var showLogin = false
-    private let mapsURL = URL(string: "http://maps.apple.com/?q=Sollentuna%20Dans%20%26%20Scenskola&address=Kuskv%C3%A4gen%206%2C%20191%2062%20Sollentuna&ll=59.4290,17.9465")!
+    @State private var safariURL: URL?
+    private let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4290,17.9465")!
     private let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     var body: some View {
@@ -71,10 +72,13 @@ struct PublicMerView: View {
                     Link(destination: URL(string: "mailto:info@sollentunadansochscenskola.se")!) {
                         Label("Mejla oss", systemImage: "envelope")
                     }
-                    Link(destination: URL(string: "https://instagram.com/sollentunadansochscenskola")!) {
+                    Button { safariURL = URL(string: "https://instagram.com/sollentunadansochscenskola") } label: {
                         Label("Instagram", systemImage: "camera")
                     }
-                    Link(destination: websiteURL) {
+                    Button { safariURL = URL(string: "https://www.tiktok.com/@sollentunadansochscen") } label: {
+                        Label("TikTok", systemImage: "tiktok")
+                    }
+                    Button { safariURL = websiteURL } label: {
                         Label("Hemsida", systemImage: "safari")
                     }
                 }
@@ -84,8 +88,8 @@ struct PublicMerView: View {
                         Label("Kuskvägen 6, 191 62 Sollentuna", systemImage: "mappin")
                     }
                     Text("Mån–Fre 15:30–21:30\nLör 9:00–14:00\nSön 9:00–13:00")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .font(SDSType.agrandir(14))
+                        .foregroundColor(.sdsSecondaryText)
                 }
 
                 Section {
@@ -100,6 +104,11 @@ struct PublicMerView: View {
             .navigationTitle("Mer")
             .sheet(isPresented: $showLogin) {
                 LoginView()
+            }
+            .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
+                if let url = safariURL {
+                    SafariView(url: url).ignoresSafeArea()
+                }
             }
         }
     }

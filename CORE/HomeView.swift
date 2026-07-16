@@ -4,6 +4,7 @@ import UIKit
 struct HomeView: View {
     @EnvironmentObject private var cogWork: CogWorkService
     @StateObject private var contentCards = ContentCardsService()
+    @Environment(\.colorScheme) private var colorScheme
 
     let onShowAllCourses: () -> Void
     let onOpenCourse: (Event) -> Void
@@ -35,6 +36,10 @@ struct HomeView: View {
         }
 
         return selected
+    }
+
+    private var heroVideoTint: Color {
+        colorScheme == .dark ? .black : .white
     }
 
     var body: some View {
@@ -72,10 +77,10 @@ struct HomeView: View {
             LoopingVideoView(filename: "Hero-film", fileExtension: "m4v")
                 .frame(height: 390)
                 .clipped()
-                .overlay(Color.white.opacity(0.16))
+                .overlay(heroVideoTint.opacity(0.16))
                 .overlay(
                     LinearGradient(
-                        colors: [.white.opacity(0.12), .clear, .white.opacity(0.18)],
+                        colors: [heroVideoTint.opacity(0.12), .clear, heroVideoTint.opacity(0.18)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -106,13 +111,14 @@ struct HomeView: View {
                 BundleImage(filename: "SDS Dancer Three Lines Black", fileExtension: "png")
                     .scaledToFit()
                     .frame(width: 184)
+                    .modifier(InvertInDarkMode(active: colorScheme == .dark))
                     .accessibilityLabel("Sollentuna Dans & Scenskola")
 
                 Spacer()
             }
             .padding(.horizontal, 22)
             .frame(height: 86)
-            .background(Color.white.opacity(0.92))
+            .background(Color.adaptive(light: "ffffff", dark: "0d0d0d").opacity(0.92))
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(Color.sdsBorder)
@@ -231,7 +237,7 @@ struct HomeView: View {
 
 private struct ContentCardView: View {
     let card: ContentCard
-    @Environment(\.openURL) private var openURL
+    @State private var safariURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -261,7 +267,7 @@ private struct ContentCardView: View {
 
             if let label = card.linkLabel, let linkUrl = card.linkUrl, let url = URL(string: linkUrl) {
                 Button {
-                    openURL(url)
+                    safariURL = url
                 } label: {
                     Label(label, systemImage: "arrow.up.right")
                         .font(SDSType.agrandir(14, weight: .bold))
@@ -277,6 +283,11 @@ private struct ContentCardView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(card.type == "banner" ? Color.clear : Color.sdsBorder, lineWidth: 1)
         )
+        .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
+            if let url = safariURL {
+                SafariView(url: url).ignoresSafeArea()
+            }
+        }
     }
 }
 
@@ -353,6 +364,17 @@ private struct BundleImage: View {
                 .resizable()
         } else {
             Color.clear
+        }
+    }
+}
+
+private struct InvertInDarkMode: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        if active {
+            content.colorInvert()
+        } else {
+            content
         }
     }
 }

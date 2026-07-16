@@ -3,7 +3,7 @@ import MapKit
 
 struct AboutView: View {
     private static let schoolCoordinate = CLLocationCoordinate2D(latitude: 59.4290, longitude: 17.9465)
-    private static let mapsURL = URL(string: "http://maps.apple.com/?q=Sollentuna%20Dans%20%26%20Scenskola&address=Kuskv%C3%A4gen%206%2C%20191%2062%20Sollentuna&ll=59.4290,17.9465")!
+    private static let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4290,17.9465")!
     private static let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     @State private var mapPosition: MapCameraPosition = .region(
@@ -13,6 +13,7 @@ struct AboutView: View {
         )
     )
     @State private var selectedInstructor: PublicInstructor?
+    @State private var safariURL: URL?
 
     private let instructors = PublicInstructor.all
 
@@ -35,6 +36,11 @@ struct AboutView: View {
             InstructorDetailView(instructor: instructor)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
+            if let url = safariURL {
+                SafariView(url: url).ignoresSafeArea()
+            }
         }
     }
 
@@ -131,11 +137,11 @@ struct AboutView: View {
                 Label("Mejla oss", systemImage: "envelope")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Link(destination: URL(string: "https://instagram.com/sollentunadansochscenskola")!) {
+            Button { safariURL = URL(string: "https://instagram.com/sollentunadansochscenskola") } label: {
                 Label("Instagram", systemImage: "camera")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Link(destination: Self.websiteURL) {
+            Button { safariURL = Self.websiteURL } label: {
                 Label("Hemsida", systemImage: "safari")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
