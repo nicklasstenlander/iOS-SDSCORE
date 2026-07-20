@@ -2,8 +2,8 @@ import SwiftUI
 import MapKit
 
 struct AboutView: View {
-    private static let schoolCoordinate = CLLocationCoordinate2D(latitude: 59.4290, longitude: 17.9465)
-    private static let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4290,17.9465")!
+    private static let schoolCoordinate = CLLocationCoordinate2D(latitude: 59.4335, longitude: 17.9321)
+    private static let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4335,17.9321")!
     private static let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     @State private var mapPosition: MapCameraPosition = .region(

@@ -61,6 +61,16 @@ final class SupabaseAuthService: ObservableObject {
         }
     }
 
+    func sendPasswordReset(email: String) async {
+        guard let url = URL(string: "\(supabaseURL)/auth/v1/recover") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(["email": email])
+        _ = try? await URLSession.shared.data(for: request)
+    }
+
     func signOut() {
         refreshTask?.cancel()
         refreshTask = nil

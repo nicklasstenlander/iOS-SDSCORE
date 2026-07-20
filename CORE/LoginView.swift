@@ -9,6 +9,9 @@ struct LoginView: View {
     @State private var showsPassword = false
     @State private var showsTemporaryPassword = false
     @State private var showsLoginHelp = false
+    @State private var showsPasswordResetEntry = false
+    @State private var showsPasswordResetConfirmation = false
+    @State private var passwordResetEmail = ""
 
     var body: some View {
         GeometryReader { proxy in
@@ -56,6 +59,23 @@ struct LoginView: View {
             temporaryPassword = DebugCredentialStore.password
         }
         #endif
+        .alert("Återställ lösenord", isPresented: $showsPasswordResetEntry) {
+            TextField("E-mailadress", text: $passwordResetEmail)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+            Button("Skicka") {
+                Task { await auth.sendPasswordReset(email: passwordResetEmail) }
+                showsPasswordResetConfirmation = true
+            }
+            Button("Avbryt", role: .cancel) {}
+        } message: {
+            Text("Ange din e-postadress för att få en återställningslänk.")
+        }
+        .alert("E-post skickat", isPresented: $showsPasswordResetConfirmation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Om adressen finns registrerad skickas en återställningslänk inom kort.")
+        }
     }
 
     private func brandHeader(for width: CGFloat) -> some View {
@@ -125,7 +145,10 @@ struct LoginView: View {
                     showsPassword.toggle()
                 }
 
-                Button("Glömt lösenord?") {}
+                Button("Glömt lösenord?") {
+                    passwordResetEmail = email
+                    showsPasswordResetEntry = true
+                }
                     .font(.custom("Agrandir-Regular", size: 12))
                     .foregroundColor(.sdsMutedText)
                     .frame(maxWidth: .infinity, alignment: .trailing)

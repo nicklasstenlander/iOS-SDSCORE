@@ -51,7 +51,7 @@ private enum PublicTab: Hashable {
 struct PublicMerView: View {
     @State private var showLogin = false
     @State private var safariURL: URL?
-    private let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4290,17.9465")!
+    private let mapsURL = URL(string: "maps://?q=Sollentuna%20Dans%20%26%20Scenskola&ll=59.4335,17.9321")!
     private let websiteURL = URL(string: "https://www.sollentunadansochscenskola.se")!
 
     var body: some View {
@@ -76,7 +76,7 @@ struct PublicMerView: View {
                         Label("Instagram", systemImage: "camera")
                     }
                     Button { safariURL = URL(string: "https://www.tiktok.com/@sollentunadansochscen") } label: {
-                        Label("TikTok", systemImage: "tiktok")
+                        Label("TikTok", systemImage: "music.note")
                     }
                     Button { safariURL = websiteURL } label: {
                         Label("Hemsida", systemImage: "safari")

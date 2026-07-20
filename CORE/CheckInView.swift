@@ -173,7 +173,7 @@ struct CheckInView: View {
 
     private var controls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if forms.count > 1 {
+            if !forms.isEmpty {
                 Picker("Formulär", selection: Binding(
                     get: { selectedFormID ?? "" },
                     set: { selectedFormID = $0 }
@@ -279,7 +279,7 @@ struct CheckInView: View {
         defer { isLoadingForms = false }
 
         do {
-            forms = try await formsService.fetchPublishedForms()
+            forms = try await formsService.fetchPublishedForms().filter { $0.enableCheckin }
             selectedFormID = forms.first?.id
             loadError = nil
         } catch {
