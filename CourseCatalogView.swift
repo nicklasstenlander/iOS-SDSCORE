@@ -307,10 +307,15 @@ struct CourseCatalogDetailSheet: View {
     let event: Event
     let mode: CourseCatalogView.Mode
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var push: PushNotificationService
     @State private var showBookingSafari = false
 
     private var bookingURL: URL? {
         URL(string: "https://dans.se/sollentunadans/shop/new?event=\(event.id)")
+    }
+
+    private var accentColor: Color {
+        mode == .public ? .sdsTeal : .sdsDarkModeGreen
     }
 
     var body: some View {
@@ -331,6 +336,9 @@ struct CourseCatalogDetailSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Stäng") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    followButton
+                }
             }
             .safeAreaInset(edge: .bottom) {
                 if bookingURL != nil {
@@ -347,7 +355,7 @@ struct CourseCatalogDetailSheet: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(mode == .public ? Color.sdsTeal : Color.sdsDarkGreen)
+                            .background(accentColor)
                             .foregroundColor(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                             .padding(.horizontal, 20)
@@ -364,6 +372,25 @@ struct CourseCatalogDetailSheet: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var followButton: some View {
+        let following = push.isFollowing(eventId: event.id)
+        Button {
+            Task {
+                if !push.isRegistered && !push.permissionDenied {
+                    await push.requestPermissionAndRegister()
+                }
+                if push.isRegistered {
+                    await push.toggleFollowedEvent(id: event.id)
+                }
+            }
+        } label: {
+            Image(systemName: following ? "bell.fill" : "bell")
+                .foregroundColor(following ? accentColor : .primary)
+        }
+        .accessibilityLabel(following ? "Sluta följa kursen" : "Följ kursen — få notiser")
     }
 
     private var headerSection: some View {
@@ -487,6 +514,7 @@ private struct CatalogDetailRow: View {
         CourseCatalogView(mode: .public)
     }
     .environmentObject(CogWorkService())
+    .environmentObject(PushNotificationService.shared)
 }
 
 #Preview("CourseCatalogView Admin") {
@@ -494,4 +522,5 @@ private struct CatalogDetailRow: View {
         CourseCatalogView()
     }
     .environmentObject(CogWorkService())
+    .environmentObject(PushNotificationService.shared)
 }

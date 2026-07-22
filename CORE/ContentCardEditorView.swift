@@ -32,7 +32,8 @@ struct ContentCardEditorView: View {
                 startsAt: starts,
                 expiresAt: expires,
                 published: card.published,
-                sortOrder: card.sortOrder
+                sortOrder: card.sortOrder,
+                sendPush: card.sendPush ?? false
             ))
             _hasExpiry = State(initialValue: card.expiresAt != nil)
         } else {
@@ -45,6 +46,7 @@ struct ContentCardEditorView: View {
         List {
             errorSection
             settingsSection
+            pushSection
             contentSection
             datesSection
             saveSection
@@ -99,6 +101,34 @@ struct ContentCardEditorView: View {
 
             Stepper("Sorteringsordning: \(draft.sortOrder)", value: $draft.sortOrder, in: 0...999)
                 .font(SDSType.agrandir(14))
+        }
+    }
+
+    @ViewBuilder
+    private var pushSection: some View {
+        let isSent = card?.pushSentAt != nil
+        Section {
+            if isSent {
+                if let sentStr = card?.pushSentAt, let formatted = formatPushSentTime(sentStr) {
+                    Label("Notis skickad \(formatted)", systemImage: "checkmark.circle.fill")
+                        .font(SDSType.agrandir(14))
+                        .foregroundColor(.sdsDarkModeGreen)
+                } else {
+                    Label("Notis redan skickad", systemImage: "checkmark.circle.fill")
+                        .font(SDSType.agrandir(14))
+                        .foregroundColor(.sdsDarkModeGreen)
+                }
+            } else {
+                Toggle("Skicka pushnotis när kortet publiceras", isOn: $draft.sendPush)
+                    .font(SDSType.agrandir(14))
+                    .tint(.sdsDarkGreen)
+            }
+        } header: {
+            Text("Pushnotis")
+        } footer: {
+            if !isSent {
+                Text("Notisen skickas inom ~15 minuter efter publicering.")
+            }
         }
     }
 
@@ -265,7 +295,9 @@ struct ContentCardEditorView: View {
                     startsAt: iso.string(from: draftToSave.startsAt),
                     expiresAt: draftToSave.expiresAt.map { iso.string(from: $0) },
                     published: draftToSave.published,
-                    sortOrder: draftToSave.sortOrder
+                    sortOrder: draftToSave.sortOrder,
+                    sendPush: draftToSave.sendPush,
+                    pushSentAt: card.pushSentAt
                 )
                 onSaved(updated)
             } else {
@@ -305,5 +337,19 @@ struct ContentCardEditorView: View {
         if let d = f.date(from: string) { return d }
         f.formatOptions = [.withInternetDateTime]
         return f.date(from: string)
+    }
+
+    private func formatPushSentTime(_ isoString: String) -> String? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = f.date(from: isoString) ?? {
+            f.formatOptions = [.withInternetDateTime]
+            return f.date(from: isoString)
+        }()
+        guard let date else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 }

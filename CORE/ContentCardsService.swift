@@ -13,6 +13,8 @@ struct ContentCard: Codable, Identifiable {
     let expiresAt: String?
     let published: Bool
     let sortOrder: Int
+    let sendPush: Bool?
+    let pushSentAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, type, title, body, published
@@ -22,6 +24,8 @@ struct ContentCard: Codable, Identifiable {
         case startsAt = "starts_at"
         case expiresAt = "expires_at"
         case sortOrder = "sort_order"
+        case sendPush = "send_push"
+        case pushSentAt = "push_sent_at"
     }
 }
 
@@ -36,6 +40,7 @@ struct ContentCardDraft {
     var expiresAt: Date? = nil
     var published: Bool = false
     var sortOrder: Int = 0
+    var sendPush: Bool = false
 }
 
 @MainActor
@@ -151,7 +156,8 @@ final class ContentCardsService: ObservableObject {
             "title": draft.title,
             "published": draft.published,
             "sort_order": draft.sortOrder,
-            "starts_at": iso.string(from: draft.startsAt)
+            "starts_at": iso.string(from: draft.startsAt),
+            "send_push": draft.sendPush
         ]
 
         let body = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)

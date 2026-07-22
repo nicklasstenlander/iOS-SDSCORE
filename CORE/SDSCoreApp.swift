@@ -2,9 +2,11 @@ import SwiftUI
 
 @main
 struct SDSCoreApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var auth = SupabaseAuthService.shared
     @StateObject private var cogWork = CogWorkService()
     @StateObject private var goals = GoalsService()
+    @StateObject private var push = PushNotificationService.shared
 
     init() {}
 
@@ -14,6 +16,7 @@ struct SDSCoreApp: App {
                 .environmentObject(auth)
                 .environmentObject(cogWork)
                 .environmentObject(goals)
+                .environmentObject(push)
         }
     }
 }
@@ -37,6 +40,7 @@ struct RootView: View {
         }
         .onChange(of: auth.isAuthenticated) { _, _ in
             syncDebugCogWorkPasswordIfNeeded()
+            Task { await PushNotificationService.shared.reRegisterIfNeeded() }
         }
     }
 

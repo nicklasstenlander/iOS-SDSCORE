@@ -213,6 +213,22 @@ struct MerView: View {
                     }
                 }
 
+                Section("Notiser") {
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        Label("Notisinställningar", systemImage: "bell")
+                    }
+
+                    if auth.isAdmin {
+                        NavigationLink {
+                            SendNotificationView()
+                        } label: {
+                            Label("Skicka notis", systemImage: "megaphone.fill")
+                        }
+                    }
+                }
+
                 Section {
                     Button {
                         Task { await refreshFromProxy() }
@@ -438,4 +454,5 @@ struct CogWorkAPISettingsSheet: View {
         .environmentObject(SupabaseAuthService())
         .environmentObject(CogWorkService())
         .environmentObject(GoalsService())
+        .environmentObject(PushNotificationService.shared)
 }

@@ -92,6 +92,14 @@ struct PublicMerView: View {
                         .foregroundColor(.sdsSecondaryText)
                 }
 
+                Section("Notiser") {
+                    NavigationLink {
+                        NotificationSettingsView()
+                    } label: {
+                        Label("Notisinställningar", systemImage: "bell")
+                    }
+                }
+
                 Section {
                     Button {
                         showLogin = true
@@ -118,10 +126,12 @@ struct PublicMerView: View {
     PublicTabView()
         .environmentObject(CogWorkService())
         .environmentObject(SupabaseAuthService())
+        .environmentObject(PushNotificationService.shared)
 }
 
 #Preview("PublicMerView") {
     PublicMerView()
         .environmentObject(CogWorkService())
         .environmentObject(SupabaseAuthService())
+        .environmentObject(PushNotificationService.shared)
 }
