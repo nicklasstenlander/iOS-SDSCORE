@@ -415,7 +415,7 @@ struct BookingDetailSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.event?.name ?? "Okänd kurs")
                                         .font(SDSType.agrandir(16, weight: .bold))
-                                        .foregroundColor(.sdsText)
+                                        .foregroundColor(.sdsPrimaryText)
                                     Text(item.status?.name ?? "Accepterad")
                                         .font(SDSType.agrandir(14))
                                         .foregroundColor(.sdsMutedText)
@@ -510,7 +510,7 @@ private struct DetailInfoRow: View {
                     .foregroundColor(.sdsMidGreen)
                 Text(value)
                     .font(SDSType.agrandir(15))
-                    .foregroundColor(.sdsText)
+                    .foregroundColor(.sdsPrimaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
 

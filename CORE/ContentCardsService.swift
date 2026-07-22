@@ -15,6 +15,8 @@ struct ContentCard: Codable, Identifiable {
     let sortOrder: Int
     let sendPush: Bool?
     let pushSentAt: String?
+    let showOnWeb: Bool
+    let showOnApp: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, type, title, body, published
@@ -26,6 +28,8 @@ struct ContentCard: Codable, Identifiable {
         case sortOrder = "sort_order"
         case sendPush = "send_push"
         case pushSentAt = "push_sent_at"
+        case showOnWeb = "show_on_web"
+        case showOnApp = "show_on_app"
     }
 }
 
@@ -41,6 +45,8 @@ struct ContentCardDraft {
     var published: Bool = false
     var sortOrder: Int = 0
     var sendPush: Bool = false
+    var showOnWeb: Bool = true
+    var showOnApp: Bool = true
 }
 
 @MainActor
@@ -68,6 +74,7 @@ final class ContentCardsService: ObservableObject {
         components.queryItems = [
             URLQueryItem(name: "select", value: "*"),
             URLQueryItem(name: "published", value: "eq.true"),
+            URLQueryItem(name: "show_on_app", value: "eq.true"),
             URLQueryItem(name: "starts_at", value: "lte.\(now)"),
             URLQueryItem(name: "or", value: "(expires_at.is.null,expires_at.gte.\(now))"),
             URLQueryItem(name: "order", value: "sort_order.asc")
@@ -157,7 +164,9 @@ final class ContentCardsService: ObservableObject {
             "published": draft.published,
             "sort_order": draft.sortOrder,
             "starts_at": iso.string(from: draft.startsAt),
-            "send_push": draft.sendPush
+            "send_push": draft.sendPush,
+            "show_on_web": draft.showOnWeb,
+            "show_on_app": draft.showOnApp
         ]
 
         let body = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)

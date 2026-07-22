@@ -165,6 +165,16 @@ private struct CardRowView: View {
                     .font(SDSType.agrandir(12))
                     .foregroundColor(.sdsSecondaryText)
             }
+
+            Spacer()
+
+            HStack(spacing: 2) {
+                Text("🌐")
+                    .opacity(card.showOnWeb ? 1.0 : 0.25)
+                Text("📱")
+                    .opacity(card.showOnApp ? 1.0 : 0.25)
+            }
+            .font(.system(size: 13))
         }
         .padding(.vertical, 4)
     }

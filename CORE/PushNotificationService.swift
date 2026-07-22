@@ -25,6 +25,9 @@ final class PushNotificationService: ObservableObject {
     @Published var permissionDenied = false
     @Published var prefs = NotificationPrefs()
     @Published var updateError: String?
+    @Published var hasSeenNotificationPrompt: Bool = false {
+        didSet { UserDefaults.standard.set(hasSeenNotificationPrompt, forKey: "hasSeenNotificationPrompt") }
+    }
 
     private let workerBaseURL = "https://sds-cogwork-proxy.nicklas-stenlander.workers.dev"
     private let tokenDefaultsKey = "sds_push_device_token"
@@ -36,6 +39,7 @@ final class PushNotificationService: ObservableObject {
     }
 
     private init() {
+        hasSeenNotificationPrompt = UserDefaults.standard.bool(forKey: "hasSeenNotificationPrompt")
         loadPrefsFromDefaults()
         if deviceToken != nil { isRegistered = true }
         Task { await checkCurrentPermission() }

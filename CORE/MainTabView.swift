@@ -122,7 +122,7 @@ struct WebSectionPlaceholderView: View {
                                     .foregroundColor(.sdsDarkGreen)
                                 Text(item)
                                     .font(SDSType.agrandir(14))
-                                    .foregroundColor(.sdsText)
+                                    .foregroundColor(.sdsPrimaryText)
                             }
                         }
                     }

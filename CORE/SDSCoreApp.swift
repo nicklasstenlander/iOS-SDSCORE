@@ -24,6 +24,7 @@ struct SDSCoreApp: App {
 struct RootView: View {
     @EnvironmentObject var auth: SupabaseAuthService
     @EnvironmentObject var cogWork: CogWorkService
+    @EnvironmentObject var push: PushNotificationService
 
     var body: some View {
         Group {
@@ -34,6 +35,13 @@ struct RootView: View {
             } else {
                 PublicTabView()
             }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { !push.hasSeenNotificationPrompt && !auth.isLoading },
+            set: { _ in }
+        )) {
+            NotificationPrimingView()
+                .environmentObject(push)
         }
         .task {
             syncDebugCogWorkPasswordIfNeeded()

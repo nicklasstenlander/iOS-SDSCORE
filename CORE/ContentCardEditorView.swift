@@ -33,7 +33,9 @@ struct ContentCardEditorView: View {
                 expiresAt: expires,
                 published: card.published,
                 sortOrder: card.sortOrder,
-                sendPush: card.sendPush ?? false
+                sendPush: card.sendPush ?? false,
+                showOnWeb: card.showOnWeb,
+                showOnApp: card.showOnApp
             ))
             _hasExpiry = State(initialValue: card.expiresAt != nil)
         } else {
@@ -97,6 +99,14 @@ struct ContentCardEditorView: View {
 
             Toggle("Publicerad", isOn: $draft.published)
                 .font(SDSType.agrandir(14, weight: .bold))
+                .tint(.sdsDarkGreen)
+
+            Toggle("Visa på webben", isOn: $draft.showOnWeb)
+                .font(SDSType.agrandir(14))
+                .tint(.sdsDarkGreen)
+
+            Toggle("Visa i appen", isOn: $draft.showOnApp)
+                .font(SDSType.agrandir(14))
                 .tint(.sdsDarkGreen)
 
             Stepper("Sorteringsordning: \(draft.sortOrder)", value: $draft.sortOrder, in: 0...999)
@@ -297,7 +307,9 @@ struct ContentCardEditorView: View {
                     published: draftToSave.published,
                     sortOrder: draftToSave.sortOrder,
                     sendPush: draftToSave.sendPush,
-                    pushSentAt: card.pushSentAt
+                    pushSentAt: card.pushSentAt,
+                    showOnWeb: draftToSave.showOnWeb,
+                    showOnApp: draftToSave.showOnApp
                 )
                 onSaved(updated)
             } else {
