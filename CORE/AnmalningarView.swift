@@ -519,7 +519,7 @@ private struct DetailInfoRow: View {
     }
 }
 
-private extension Booking {
+extension Booking {
     var isPaid: Bool {
         payment?.paid == true
     }

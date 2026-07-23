@@ -476,7 +476,7 @@ struct UsersResponse: Decodable {
 
 // MARK: - Supabase-profil
 
-struct UserProfile: Codable {
+struct UserProfile: Codable, Equatable {
     let id: String
     let fullName: String
     let role: String

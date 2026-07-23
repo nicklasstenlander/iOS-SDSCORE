@@ -50,6 +50,10 @@ struct RootView: View {
             syncDebugCogWorkPasswordIfNeeded()
             Task { await PushNotificationService.shared.reRegisterIfNeeded() }
         }
+        .onChange(of: auth.profile) { _, profile in
+            guard profile != nil else { return }
+            Task { await PushNotificationService.shared.reRegisterIfNeeded() }
+        }
     }
 
     private func syncDebugCogWorkPasswordIfNeeded() {

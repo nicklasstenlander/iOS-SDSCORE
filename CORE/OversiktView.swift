@@ -6,7 +6,8 @@ struct OversiktView: View {
     @EnvironmentObject var goals: GoalsService
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.colorScheme) private var colorScheme
-    @State private var expandedCard: OverviewCardID?
+    @Namespace private var cardNamespace
+    @State private var navigationPath: [OverviewCardID] = []
     @State private var selectedCourse: CourseOverviewData?
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
@@ -50,65 +51,76 @@ struct OversiktView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                header
-                filters
-                if auth.isAdmin {
-                    goalsSection
-                }
-                overviewKPIs
-                courseOverviewSection
+        NavigationStack(path: $navigationPath) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    header
+                    filters
+                    if auth.isAdmin {
+                        goalsSection
+                    }
+                    overviewKPIs
+                    courseOverviewSection
 
-                if let error = cogWork.errorMessage {
-                    Text(error)
-                        .font(SDSType.agrandir(13, weight: .bold))
-                        .foregroundColor(.sdsPink)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.sdsPinkSurface)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    if let error = cogWork.errorMessage {
+                        Text(error)
+                            .font(SDSType.agrandir(13, weight: .bold))
+                            .foregroundColor(.sdsPink)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.sdsPinkSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    }
                 }
+                .padding(20)
+                .frame(maxWidth: 980, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { contentWidth = proxy.size.width }
+                            .onChange(of: proxy.size.width) { _, newValue in
+                                contentWidth = newValue
+                            }
+                    }
+                )
             }
-            .padding(20)
-            .frame(maxWidth: 980, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { contentWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, newValue in
-                            contentWidth = newValue
-                        }
-                }
-            )
-        }
-        .background(Color.sdsPageBackground.ignoresSafeArea())
-        .refreshable {
-            await cogWork.loadAllData()
-        }
-        .task {
-            if cogWork.bookings.isEmpty {
+            .background(Color.sdsPageBackground.ignoresSafeArea())
+            .refreshable {
                 await cogWork.loadAllData()
             }
-            if goals.goals.isEmpty {
-                await goals.loadGoals()
+            .task {
+                if cogWork.bookings.isEmpty {
+                    await cogWork.loadAllData()
+                }
+                if goals.goals.isEmpty {
+                    await goals.loadGoals()
+                }
             }
-        }
-        .task(id: cogWork.selectedPeriod) {
-            await rebuildCourseRows()
-        }
-        .onChange(of: cogWork.lastUpdated) { _, _ in
-            Task { await rebuildCourseRows() }
-        }
-        .onChange(of: cogWork.selectedPeriod) { _, _ in
-            expandedCard = nil
-            selectedCourse = nil
-        }
-        .sheet(item: $selectedCourse) { course in
-            CourseDetailSheet(course: course)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            .task(id: cogWork.selectedPeriod) {
+                await rebuildCourseRows()
+            }
+            .onChange(of: cogWork.lastUpdated) { _, _ in
+                Task { await rebuildCourseRows() }
+            }
+            .onChange(of: cogWork.selectedPeriod) { _, _ in
+                navigationPath = []
+                selectedCourse = nil
+            }
+            .sheet(item: $selectedCourse) { course in
+                CourseDetailSheet(course: course)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+            .navigationDestination(for: OverviewCardID.self) { id in
+                if let card = overviewCards.first(where: { $0.id == id }) {
+                    MetricListView(
+                        card: card,
+                        courseRows: id == .occupancy ? cachedCourseRows : [],
+                        namespace: cardNamespace
+                    )
+                }
+            }
         }
     }
 
@@ -186,37 +198,30 @@ struct OversiktView: View {
 
             LazyVGrid(columns: gridColumns, spacing: 12) {
                 ForEach(overviewCards) { card in
-                    WebKPICard(
-                        title: card.title,
-                        value: card.value,
-                        subtitle: card.subtitle,
-                        delta: card.delta,
-                        icon: card.icon,
-                        style: card.style,
-                        isExpanded: expandedCard == card.id
-                    )
-                    .contentShape(RoundedRectangle(cornerRadius: 18))
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
-                            expandedCard = expandedCard == card.id ? nil : card.id
-                        }
+                    Button {
+                        navigationPath.append(card.id)
+                    } label: {
+                        WebKPICard(
+                            title: card.title,
+                            value: card.value,
+                            subtitle: card.subtitle,
+                            delta: card.delta,
+                            icon: card.icon,
+                            style: card.style,
+                            showChevron: card.isNavigable
+                        )
+                        .matchedTransitionSource(id: card.id, in: cardNamespace)
                     }
+                    .buttonStyle(KPICardButtonStyle())
+                    .disabled(!card.isNavigable)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(card.title)
+                    .accessibilityValue(card.value)
+                    .accessibilityHint(card.isNavigable ? "Öppnar listan" : "")
                     .accessibilityAddTraits(.isButton)
                 }
             }
-
-            if let selected = selectedOverviewCard {
-                ExpandedKPICard(card: selected)
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.98, anchor: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-            }
         }
-    }
-
-    private var selectedOverviewCard: OverviewCard? {
-        overviewCards.first { $0.id == expandedCard }
     }
 
     private var goalsSection: some View {
@@ -443,6 +448,10 @@ struct OversiktView: View {
         return statisticalPeriodBookings.filter { $0.created.hasPrefix(today) }.count
     }
 
+    private var uniqueParticipantCount: Int {
+        Set(statisticalPeriodBookings.compactMap { $0.participant?.key ?? $0.participant?.name }).count
+    }
+
     private var unpaidCount: Int {
         statisticalPeriodBookings.filter { $0.payment?.paid == false }.count
     }
@@ -537,9 +546,9 @@ struct OversiktView: View {
         let cards: [OverviewCard] = [
             OverviewCard(
                 id: .registered,
-                title: "Anmälda",
+                title: "Anmälningar",
                 value: formatted(statisticalPeriodBookings.count),
-                subtitle: "\(uniqueCourseCount) kurser",
+                subtitle: "\(uniqueParticipantCount) elever · \(uniqueCourseCount) kurser",
                 delta: newTodayCount > 0 ? "+\(newTodayCount) idag" : nil,
                 icon: "person.2",
                 style: .violet,
@@ -921,6 +930,10 @@ private struct OverviewCard: Identifiable {
     let detailTitle: String
     let detailRows: [OverviewDetailRow]
     var bookingFilter: BookingFilter = .none
+
+    var isNavigable: Bool {
+        value != "0" && value != "—"
+    }
 }
 
 private struct OverviewDetailRow: Identifiable {
@@ -946,7 +959,7 @@ struct WebKPICard: View {
     var delta: String?
     let icon: String
     let style: Style
-    var isExpanded = false
+    var showChevron = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -957,6 +970,12 @@ struct WebKPICard: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
+
+                if showChevron {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(titleColor.opacity(0.45))
+                }
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
@@ -975,7 +994,7 @@ struct WebKPICard: View {
                         .foregroundColor(valueColor)
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.7)
 
                     if let delta {
                         Text(delta)
@@ -990,31 +1009,20 @@ struct WebKPICard: View {
                         .font(SDSType.agrandir(11))
                         .foregroundColor(valueColor.opacity(0.72))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
 
             Spacer(minLength: 4)
-
-            HStack {
-                Text(isExpanded ? "Visar detaljer" : "Tryck för mer")
-                    .font(SDSType.agrandir(10, weight: .bold))
-                    .foregroundColor(valueColor.opacity(0.62))
-                Spacer()
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(valueColor.opacity(0.62))
-            }
-            .padding(.top, 7)
         }
         .frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading)
         .padding(12)
         .background(background)
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(isExpanded ? iconColor.opacity(0.46) : borderColor, lineWidth: isExpanded ? 1.5 : 1)
+                .stroke(borderColor, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .scaleEffect(isExpanded ? 1.015 : 1)
     }
 
     private var background: Color {
@@ -1068,255 +1076,11 @@ struct WebKPICard: View {
     }
 }
 
-private struct ExpandedKPICard: View {
-    @EnvironmentObject var cogWork: CogWorkService
-    let card: OverviewCard
-    @State private var loadedBookings: [Booking] = []
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: card.icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.sdsDarkModeGreen)
-                    .frame(width: 42, height: 42)
-                    .background(Color.sdsIconBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(card.detailTitle)
-                        .font(SDSType.agrandir(20, weight: .bold))
-                        .foregroundColor(.sdsPrimaryText)
-                    Text("Detaljer för \(card.title.lowercased()) i vald period.")
-                        .font(SDSType.agrandir(13))
-                        .foregroundColor(.sdsSecondaryText)
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            VStack(spacing: 0) {
-                ForEach(card.detailRows) { row in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(row.label)
-                            .font(SDSType.agrandir(13))
-                            .foregroundColor(.sdsSecondaryText)
-                        Spacer(minLength: 12)
-                        Text(row.value)
-                            .font(SDSType.agrandir(15, weight: .bold))
-                            .foregroundColor(.sdsPrimaryText)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .padding(.vertical, 11)
-
-                    if row.id != card.detailRows.last?.id {
-                        Rectangle()
-                            .fill(Color.sdsBorder)
-                            .frame(height: 1)
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .background(Color.sdsSubtleSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-
-            if !loadedBookings.isEmpty {
-                OverviewBookingList(bookings: loadedBookings)
-            }
-        }
-        .padding(18)
-        .background(Color.sdsElevatedSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.sdsBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .task(id: card.id) {
-            loadedBookings = card.bookingFilter.apply(to: cogWork.periodBookings)
-        }
-    }
-}
-
-private struct OverviewBookingList: View {
-    @EnvironmentObject var cogWork: CogWorkService
-    @State private var selectedCustomer: CogWorkUser?
-    let bookings: [Booking]
-
-    private var visibleBookings: [Booking] {
-        Array(bookings.prefix(12))
-    }
-
-    private var ticketCount: Int {
-        bookings.reduce(0) { $0 + CourseMetricsEngine.bookingTicketQuantity($1) }
-    }
-
-    private var eventLookup: [String: Event] {
-        cogWork.events.reduce(into: [:]) { lookup, event in
-            var keys = [String(event.id)]
-            if let key = event.key, !key.isEmpty {
-                keys.append(key)
-            }
-            for key in keys where lookup[key] == nil {
-                lookup[key] = event
-            }
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Poster")
-                    .font(SDSType.agrandir(13, weight: .bold))
-                    .foregroundColor(.sdsPrimaryText)
-
-                Spacer()
-
-                Text(summary)
-                    .font(SDSType.agrandir(11, weight: .bold))
-                    .foregroundColor(.sdsSecondaryText)
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 13)
-            .padding(.bottom, 8)
-
-            ForEach(visibleBookings) { booking in
-                OverviewBookingRow(
-                    booking: booking,
-                    isTicketPurchase: CourseMetricsEngine.isPerformance(booking: booking, eventLookup: eventLookup)
-                ) {
-                    await openCustomer(for: booking)
-                }
-
-                if booking.id != visibleBookings.last?.id {
-                    Rectangle()
-                        .fill(Color.sdsBorder)
-                        .frame(height: 1)
-                        .padding(.leading, 56)
-                }
-            }
-
-            if bookings.count > visibleBookings.count {
-                Text("+ \(bookings.count - visibleBookings.count) fler poster")
-                    .font(SDSType.agrandir(12, weight: .bold))
-                    .foregroundColor(.sdsSecondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-            }
-        }
-        .background(Color.sdsSubtleSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .sheet(item: $selectedCustomer) { user in
-            CustomerDetailSheet(user: user)
-                .environmentObject(cogWork)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
-    }
-
-    private var summary: String {
-        if ticketCount == bookings.count {
-            return "\(bookings.count) personer"
-        }
-        return "\(ticketCount) biljetter · \(bookings.count) köp"
-    }
-
-    private func openCustomer(for booking: Booking) async {
-        guard let name = booking.participant?.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else { return }
-
-        selectedCustomer = await cogWork.loadUser(named: name)
-    }
-}
-
-private struct OverviewBookingRow: View {
-    let booking: Booking
-    let isTicketPurchase: Bool
-    let openCustomer: () async -> Void
-
-    private var ticketQuantity: Int {
-        CourseMetricsEngine.bookingTicketQuantity(booking)
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Circle()
-                .fill(Color.sdsTeal)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Text(initials)
-                        .font(SDSType.agrandir(11, weight: .bold))
-                        .foregroundColor(.white)
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Button {
-                    Task { await openCustomer() }
-                } label: {
-                    Text(name)
-                        .font(SDSType.agrandir(13, weight: .bold))
-                        .foregroundColor(.sdsPrimaryText)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-
-                Text(booking.event?.name ?? "Okänd kurs")
-                    .font(SDSType.agrandir(11))
-                    .foregroundColor(.sdsSecondaryText)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 6)
-
-            if ticketQuantity > 1 {
-                SDSBadge(text: "\(ticketQuantity) biljetter", color: .sdsSurface, textColor: .sdsSecondaryText)
-            }
-
-            if isTicketPurchase {
-                SDSBadge(text: "Biljettköp", color: .sdsAmberAdaptiveSurface, textColor: .sdsWarningText)
-            }
-
-            PaymentStatusBadge(booking: booking)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private var name: String {
-        booking.participant?.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? booking.participant?.name ?? "Okänd deltagare"
-            : "Okänd deltagare"
-    }
-
-    private var initials: String {
-        let parts = name.split(separator: " ")
-        let first = parts.first?.first.map(String.init) ?? ""
-        let second = parts.dropFirst().first?.first.map(String.init) ?? ""
-        let value = (first + second).uppercased()
-        return value.isEmpty ? "?" : value
-    }
-}
-
-private struct PaymentStatusBadge: View {
-    let booking: Booking
-
-    var body: some View {
-        if booking.payment?.paid == true {
-            SDSBadge(text: paidText, color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
-        } else if booking.payment?.paid == false {
-            SDSBadge(text: unpaidText, color: .sdsPinkAdaptiveSurface, textColor: .sdsPink)
-        }
-    }
-
-    private var paidText: String {
-        let amount = booking.payment?.priceAgreed ?? booking.payment?.amountPaid
-        guard let amount else { return "Betald" }
-        return "Betald · \(Int(amount).formatted(.number.locale(Locale(identifier: "sv_SE")))) kr"
-    }
-
-    private var unpaidText: String {
-        guard let due = booking.payment?.paymentDue, !due.isEmpty else { return "Obetald" }
-        return "Obetald · \(String(due.prefix(10)))"
+private struct KPICardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
 }
 
@@ -2060,6 +1824,277 @@ private extension Booking {
         let monthValue = value.dropFirst(5).prefix(2)
         let month = Int(monthValue) ?? 8
         return month >= 7 ? "Höstterminen \(year)" : "Vårterminen \(year)"
+    }
+}
+
+// MARK: - MetricListView
+
+private enum MetricListFilter: CaseIterable, Hashable {
+    case all, paid, unpaid, today
+
+    var title: String {
+        switch self {
+        case .all: "Alla"
+        case .paid: "Betalda"
+        case .unpaid: "Obetalda"
+        case .today: "Idag"
+        }
+    }
+
+    func matches(_ booking: Booking) -> Bool {
+        switch self {
+        case .all: return true
+        case .paid: return booking.payment?.paid == true
+        case .unpaid: return booking.payment?.paid == false
+        case .today:
+            let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+            return booking.created.hasPrefix(today)
+        }
+    }
+
+    static func defaultFor(_ bookingFilter: BookingFilter) -> MetricListFilter {
+        switch bookingFilter {
+        case .paid: return .paid
+        case .unpaid: return .unpaid
+        default: return .all
+        }
+    }
+}
+
+private struct MetricListView: View {
+    let card: OverviewCard
+    let courseRows: [CourseOverviewData]
+    let namespace: Namespace.ID
+
+    @EnvironmentObject private var cogWork: CogWorkService
+    @State private var searchText = ""
+    @State private var activeFilter: MetricListFilter
+    @State private var selectedBooking: Booking?
+    @State private var selectedCourse: CourseOverviewData?
+
+    init(card: OverviewCard, courseRows: [CourseOverviewData], namespace: Namespace.ID) {
+        self.card = card
+        self.courseRows = courseRows
+        self.namespace = namespace
+        self._activeFilter = State(initialValue: MetricListFilter.defaultFor(card.bookingFilter))
+    }
+
+    private var eventLookup: [String: Event] {
+        cogWork.events.reduce(into: [:]) { lookup, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty { keys.append(key) }
+            for key in keys where lookup[key] == nil { lookup[key] = event }
+        }
+    }
+
+    private var bookingCountByParticipant: [String: Int] {
+        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
+    }
+
+    private var sourceBookings: [Booking] {
+        let base = cogWork.statisticalPeriodBookings
+        switch card.id {
+        case .courses:
+            return base.filter(\.isAcceptedForOverview)
+                .sorted { ($0.participant?.name ?? "") < ($1.participant?.name ?? "") }
+        default:
+            return card.bookingFilter.apply(to: base)
+        }
+    }
+
+    private var filteredBookings: [Booking] {
+        sourceBookings
+            .filter { searchText.isEmpty || matchesSearch($0) }
+            .filter { activeFilter.matches($0) }
+    }
+
+    private func matchesSearch(_ booking: Booking) -> Bool {
+        (booking.participant?.name?.localizedCaseInsensitiveContains(searchText) ?? false)
+            || (booking.event?.name?.localizedCaseInsensitiveContains(searchText) ?? false)
+    }
+
+    private var filteredCourses: [CourseOverviewData] {
+        let base = searchText.isEmpty ? courseRows : courseRows.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+        return base.sorted { $0.occupancyPercent < $1.occupancyPercent }
+    }
+
+    private var summaryLine: String {
+        if card.id == .occupancy {
+            let count = filteredCourses.count
+            return count == courseRows.count
+                ? "\(count) kurser · lägst beläggning först"
+                : "Visar \(count) av \(courseRows.count) kurser"
+        }
+        let total = sourceBookings.count
+        let shown = filteredBookings.count
+        if shown < total {
+            let shownFmt = shown.formatted(.number.locale(Locale(identifier: "sv_SE")))
+            let totalFmt = total.formatted(.number.locale(Locale(identifier: "sv_SE")))
+            return "Visar \(shownFmt) av \(totalFmt)"
+        }
+        switch card.id {
+        case .registered:
+            let allStats = cogWork.statisticalPeriodBookings
+            let uniqueStudents = Set(allStats.compactMap { $0.participant?.key ?? $0.participant?.name }).count
+            let uniqueCourses = Set(allStats.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
+            let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+            let newToday = allStats.filter { $0.created.hasPrefix(today) }.count
+            var parts = ["\(uniqueStudents) elever", "\(uniqueCourses) kurser"]
+            if newToday > 0 { parts.append("\(newToday) nya idag") }
+            return parts.joined(separator: " · ")
+        default:
+            let countFmt = total.formatted(.number.locale(Locale(identifier: "sv_SE")))
+            return "\(countFmt) anmälningar"
+        }
+    }
+
+    private func relatedBookings(for booking: Booking) -> [Booking] {
+        let identifier = booking.participant?.key ?? booking.participant?.name
+        return cogWork.bookings.filter { ($0.participant?.key ?? $0.participant?.name) == identifier }
+    }
+
+    var body: some View {
+        Group {
+            if card.id == .occupancy {
+                occupancyList
+            } else {
+                bookingList
+            }
+        }
+        .navigationTitle(card.detailTitle)
+        .navigationBarTitleDisplayMode(.large)
+        .background(Color.sdsPageBackground.ignoresSafeArea())
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: card.id == .occupancy ? "Sök kurs" : "Sök deltagare eller kurs"
+        )
+        .refreshable { await cogWork.loadAllData() }
+        .navigationTransition(.zoom(sourceID: card.id, in: namespace))
+        .sheet(item: $selectedBooking) { booking in
+            BookingDetailSheet(booking: booking, relatedBookings: relatedBookings(for: booking))
+        }
+        .sheet(item: $selectedCourse) { course in
+            CourseDetailSheet(course: course)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var bookingList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(summaryLine)
+                        .font(SDSType.agrandir(13))
+                        .foregroundColor(.sdsSecondaryText)
+
+                    filterChips
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+                if filteredBookings.isEmpty {
+                    emptyBookingState
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(filteredBookings) { booking in
+                            BookingRow(
+                                booking: booking,
+                                isNewStudent: CourseMetricsEngine.isNewStudentBooking(
+                                    booking, countByParticipant: bookingCountByParticipant),
+                                isTicketPurchase: CourseMetricsEngine.isPerformance(
+                                    booking: booking, eventLookup: eventLookup),
+                                scheduleText: booking.courseScheduleText(eventLookup: eventLookup)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedBooking = booking }
+
+                            if booking.id != filteredBookings.last?.id {
+                                Rectangle()
+                                    .fill(Color.sdsBorder)
+                                    .frame(height: 1)
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    }
+                    .background(Color.sdsElevatedSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.sdsBorder, lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 20)
+                }
+            }
+            .contentMargins(.bottom, 88, for: .scrollContent)
+        }
+    }
+
+    private var occupancyList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                Text(summaryLine)
+                    .font(SDSType.agrandir(13))
+                    .foregroundColor(.sdsSecondaryText)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
+
+                if filteredCourses.isEmpty {
+                    emptyCourseState
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 12, alignment: .top)],
+                        spacing: 12
+                    ) {
+                        ForEach(filteredCourses) { row in
+                            CourseOverviewRow(row: row) {
+                                selectedCourse = row
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            .contentMargins(.bottom, 88, for: .scrollContent)
+        }
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(MetricListFilter.allCases, id: \.self) { filter in
+                    SDSPill(title: filter.title, isSelected: activeFilter == filter) {
+                        activeFilter = filter
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyBookingState: some View {
+        if searchText.isEmpty && activeFilter == .all {
+            ContentUnavailableView(
+                "Inga poster",
+                systemImage: "tray",
+                description: Text("Det finns inga anmälningar för detta filter i vald period.")
+            )
+            .padding(.top, 60)
+        } else {
+            ContentUnavailableView.search(text: searchText.isEmpty ? activeFilter.title : searchText)
+                .padding(.top, 60)
+        }
+    }
+
+    @ViewBuilder
+    private var emptyCourseState: some View {
+        ContentUnavailableView.search(text: searchText)
+            .padding(.top, 60)
     }
 }
 

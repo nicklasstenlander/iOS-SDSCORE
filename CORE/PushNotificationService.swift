@@ -125,16 +125,22 @@ final class PushNotificationService: ObservableObject {
         savePrefsToDefaults()
         updateError = nil
 
+        let auth = SupabaseAuthService.shared
+
         guard let token = deviceToken,
-              let url = URL(string: "\(workerBaseURL)/push/preferences"),
-              let body = try? JSONSerialization.data(withJSONObject: [
-                  "deviceToken": token,
-                  "notifyNews": prefs.notifyNews,
-                  "notifyNewBookings": prefs.notifyNewBookings,
-                  "notifyPayments": prefs.notifyPayments,
-                  "followedEventIds": prefs.followedEventIds,
-              ] as [String: Any])
+              let url = URL(string: "\(workerBaseURL)/push/preferences")
         else { return }
+
+        var payload: [String: Any] = [
+            "deviceToken": token,
+            "notifyNews": prefs.notifyNews,
+            "notifyNewBookings": prefs.notifyNewBookings,
+            "notifyPayments": prefs.notifyPayments,
+            "followedEventIds": prefs.followedEventIds,
+        ]
+        if let role = auth.profile?.role { payload["role"] = role }
+
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
