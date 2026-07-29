@@ -5,9 +5,12 @@ struct ContentCardEditorView: View {
     let onSaved: (ContentCard) -> Void
     let onDeleted: (String) -> Void
 
+    @EnvironmentObject private var cogWork: CogWorkService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var service = ContentCardsService()
     @State private var draft: ContentCardDraft
+    @State private var linkDestinationType: ContentCardLinkDestinationType
+    @State private var selectedEventId: Int?
     @State private var hasExpiry: Bool
     @State private var isSaving = false
     @State private var isDeleting = false
@@ -22,6 +25,9 @@ struct ContentCardEditorView: View {
         if let card {
             let starts = Self.parseDate(card.startsAt) ?? Date()
             let expires = card.expiresAt.flatMap { Self.parseDate($0) }
+            let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let initialLinkDestinationType = Self.linkDestinationType(for: destination)
+            let initialSelectedEventId = Self.selectedEventId(from: destination)
             _draft = State(initialValue: ContentCardDraft(
                 type: card.type,
                 title: card.title,
@@ -29,6 +35,7 @@ struct ContentCardEditorView: View {
                 imageUrl: card.imageUrl ?? "",
                 linkUrl: card.linkUrl ?? "",
                 linkLabel: card.linkLabel ?? "",
+                appDestination: destination?.isEmpty == false ? destination : nil,
                 startsAt: starts,
                 expiresAt: expires,
                 published: card.published,
@@ -37,9 +44,13 @@ struct ContentCardEditorView: View {
                 showOnWeb: card.showOnWeb,
                 showOnApp: card.showOnApp
             ))
+            _linkDestinationType = State(initialValue: initialLinkDestinationType)
+            _selectedEventId = State(initialValue: initialSelectedEventId)
             _hasExpiry = State(initialValue: card.expiresAt != nil)
         } else {
             _draft = State(initialValue: ContentCardDraft())
+            _linkDestinationType = State(initialValue: .external)
+            _selectedEventId = State(initialValue: nil)
             _hasExpiry = State(initialValue: false)
         }
     }
@@ -71,6 +82,17 @@ struct ContentCardEditorView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.sdsPageBackground)
+        .task {
+            if cogWork.events.isEmpty {
+                await cogWork.loadEvents()
+            }
+        }
+        .onChange(of: linkDestinationType) { _, _ in
+            syncLinkDestination()
+        }
+        .onChange(of: selectedEventId) { _, _ in
+            syncLinkDestination()
+        }
     }
 
     @ViewBuilder
@@ -182,11 +204,24 @@ struct ContentCardEditorView: View {
                 }
             }
 
-            TextField("Länk-URL", text: $draft.linkUrl)
-                .font(SDSType.agrandir(15))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
+            Picker("Länk-typ", selection: $linkDestinationType) {
+                ForEach(ContentCardLinkDestinationType.allCases) { type in
+                    Text(type.label).tag(type)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(.sdsDarkModeGreen)
+            .font(SDSType.agrandir(15))
+
+            if linkDestinationType == .external {
+                TextField("Länk-URL", text: $draft.linkUrl)
+                    .font(SDSType.agrandir(15))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+            } else if linkDestinationType == .specificCourse {
+                CourseEventPicker(title: "Kurs", selectedEventId: $selectedEventId)
+            }
 
             TextField("Länktext (t.ex. Anmäl dig)", text: $draft.linkLabel)
                 .font(SDSType.agrandir(15))
@@ -231,6 +266,7 @@ struct ContentCardEditorView: View {
 
     private var saveSection: some View {
         let titleEmpty = draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let missingCourse = linkDestinationType == .specificCourse && selectedEventId == nil
         return Section {
             Button {
                 Task { await save() }
@@ -248,8 +284,8 @@ struct ContentCardEditorView: View {
                 }
                 .padding(.vertical, 10)
             }
-            .disabled(isSaving || isDeleting || titleEmpty)
-            .listRowBackground(titleEmpty ? Color.sdsSubtleSurface : Color.sdsMidGreen)
+            .disabled(isSaving || isDeleting || titleEmpty || missingCourse)
+            .listRowBackground(titleEmpty || missingCourse ? Color.sdsSubtleSurface : Color.sdsMidGreen)
             .foregroundColor(.sdsDarkGreen)
         }
     }
@@ -288,6 +324,7 @@ struct ContentCardEditorView: View {
         if !hasExpiry {
             draftToSave.expiresAt = nil
         }
+        syncLinkDestination(on: &draftToSave)
 
         do {
             if let card {
@@ -302,6 +339,7 @@ struct ContentCardEditorView: View {
                     imageUrl: emptyToNil(draftToSave.imageUrl),
                     linkUrl: emptyToNil(draftToSave.linkUrl),
                     linkLabel: emptyToNil(draftToSave.linkLabel),
+                    appDestination: draftToSave.appDestination,
                     startsAt: iso.string(from: draftToSave.startsAt),
                     expiresAt: draftToSave.expiresAt.map { iso.string(from: $0) },
                     published: draftToSave.published,
@@ -343,6 +381,43 @@ struct ContentCardEditorView: View {
         return t.isEmpty ? nil : t
     }
 
+    private func syncLinkDestination() {
+        syncLinkDestination(on: &draft)
+    }
+
+    private func syncLinkDestination(on draft: inout ContentCardDraft) {
+        switch linkDestinationType {
+        case .external:
+            draft.appDestination = nil
+        case .courses:
+            draft.linkUrl = ""
+            draft.appDestination = "kurser"
+        case .schedule:
+            draft.linkUrl = ""
+            draft.appDestination = "schema"
+        case .specificCourse:
+            draft.linkUrl = ""
+            if let selectedEventId {
+                draft.appDestination = "course:\(selectedEventId)"
+            } else {
+                draft.appDestination = nil
+            }
+        }
+    }
+
+    private static func linkDestinationType(for destination: String?) -> ContentCardLinkDestinationType {
+        guard let destination, !destination.isEmpty else { return .external }
+        if destination == "kurser" { return .courses }
+        if destination == "schema" { return .schedule }
+        if destination.hasPrefix("course:") { return .specificCourse }
+        return .external
+    }
+
+    private static func selectedEventId(from destination: String?) -> Int? {
+        guard let destination, destination.hasPrefix("course:") else { return nil }
+        return Int(destination.replacingOccurrences(of: "course:", with: ""))
+    }
+
     private static func parseDate(_ string: String) -> Date? {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -363,5 +438,23 @@ struct ContentCardEditorView: View {
         formatter.locale = Locale(identifier: "sv_SE")
         formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+private enum ContentCardLinkDestinationType: String, CaseIterable, Identifiable {
+    case external
+    case courses
+    case schedule
+    case specificCourse
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .external: "Extern länk"
+        case .courses: "Kurser-fliken"
+        case .schedule: "Schema-fliken"
+        case .specificCourse: "En specifik kurs"
+        }
     }
 }

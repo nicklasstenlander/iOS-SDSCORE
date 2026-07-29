@@ -7,7 +7,11 @@ struct HomeView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     let onShowAllCourses: () -> Void
+    let onShowSchedule: () -> Void
     let onOpenCourse: (Event) -> Void
+    let onOpenCourseID: (Int) -> Void
+    @State private var bookingURL: URL?
+    @State private var showSafari = false
 
     private let levels: [(name: String, description: String)] = [
         ("Nivå 1", "För dig som aldrig dansat tidigare. Grundläggande teknik och rörelseglädje i ett tryggt tempo."),
@@ -68,6 +72,11 @@ struct HomeView: View {
             await contentCards.loadCards()
             if cogWork.events.isEmpty {
                 await cogWork.loadEvents()
+            }
+        }
+        .sheet(isPresented: $showSafari) {
+            if let bookingURL {
+                SafariView(url: bookingURL).ignoresSafeArea()
             }
         }
     }
@@ -132,7 +141,33 @@ struct HomeView: View {
     private var contentCardsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(contentCards.cards) { card in
-                ContentCardView(card: card)
+                ContentCardView(card: card) {
+                    handleCardTap(card)
+                }
+            }
+        }
+    }
+
+    private func handleCardTap(_ card: ContentCard) {
+        guard let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !destination.isEmpty else {
+            if let urlString = card.linkUrl, let url = URL(string: urlString) {
+                bookingURL = url
+                showSafari = true
+            }
+            return
+        }
+
+        if destination == "kurser" {
+            onShowAllCourses()
+        } else if destination == "schema" {
+            onShowSchedule()
+        } else if destination.hasPrefix("course:") {
+            let eventIdString = destination.replacingOccurrences(of: "course:", with: "")
+            if let eventId = Int(eventIdString) {
+                onOpenCourseID(eventId)
+            } else {
+                onShowAllCourses()
             }
         }
     }
@@ -237,7 +272,16 @@ struct HomeView: View {
 
 private struct ContentCardView: View {
     let card: ContentCard
-    @State private var safariURL: URL?
+    let onTap: () -> Void
+
+    private var showsLinkButton: Bool {
+        guard let label = card.linkLabel, !label.isEmpty else { return false }
+        if let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !destination.isEmpty {
+            return true
+        }
+        return card.linkUrl.flatMap(URL.init(string:)) != nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -265,9 +309,9 @@ private struct ContentCardView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let label = card.linkLabel, let linkUrl = card.linkUrl, let url = URL(string: linkUrl) {
+            if let label = card.linkLabel, showsLinkButton {
                 Button {
-                    safariURL = url
+                    onTap()
                 } label: {
                     Label(label, systemImage: "arrow.up.right")
                         .font(SDSType.agrandir(14, weight: .bold))
@@ -283,11 +327,6 @@ private struct ContentCardView: View {
             RoundedRectangle(cornerRadius: 18)
                 .stroke(card.type == "banner" ? Color.clear : Color.sdsBorder, lineWidth: 1)
         )
-        .sheet(isPresented: Binding(get: { safariURL != nil }, set: { if !$0 { safariURL = nil } })) {
-            if let url = safariURL {
-                SafariView(url: url).ignoresSafeArea()
-            }
-        }
     }
 }
 
@@ -382,7 +421,9 @@ private struct InvertInDarkMode: ViewModifier {
 #Preview {
     HomeView(
         onShowAllCourses: {},
-        onOpenCourse: { _ in }
+        onShowSchedule: {},
+        onOpenCourse: { _ in },
+        onOpenCourseID: { _ in }
     )
     .environmentObject(CogWorkService())
 }

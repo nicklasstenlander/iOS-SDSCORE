@@ -9,6 +9,7 @@ struct ContentCard: Codable, Identifiable {
     let imageUrl: String?
     let linkUrl: String?
     let linkLabel: String?
+    let appDestination: String?
     let startsAt: String
     let expiresAt: String?
     let published: Bool
@@ -23,6 +24,7 @@ struct ContentCard: Codable, Identifiable {
         case imageUrl = "image_url"
         case linkUrl = "link_url"
         case linkLabel = "link_label"
+        case appDestination = "app_destination"
         case startsAt = "starts_at"
         case expiresAt = "expires_at"
         case sortOrder = "sort_order"
@@ -40,6 +42,7 @@ struct ContentCardDraft {
     var imageUrl: String = ""
     var linkUrl: String = ""
     var linkLabel: String = ""
+    var appDestination: String? = nil
     var startsAt: Date = Date()
     var expiresAt: Date? = nil
     var published: Bool = false
@@ -180,6 +183,9 @@ final class ContentCardsService: ObservableObject {
 
         let linkLabel = draft.linkLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         dict["link_label"] = linkLabel.isEmpty ? NSNull() : linkLabel
+
+        let appDestination = draft.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        dict["app_destination"] = appDestination.isEmpty ? NSNull() : appDestination
 
         if let expiresAt = draft.expiresAt {
             dict["expires_at"] = iso.string(from: expiresAt)

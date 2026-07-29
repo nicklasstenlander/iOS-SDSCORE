@@ -95,6 +95,9 @@ struct CourseCatalogView: View {
             }
             selectInitialEventIfNeeded()
         }
+        .onAppear {
+            selectInitialEventIfNeeded()
+        }
         .onChange(of: initialSelectedEventID) { _, _ in
             selectInitialEventIfNeeded()
         }

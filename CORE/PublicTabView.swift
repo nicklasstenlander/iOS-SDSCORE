@@ -8,10 +8,18 @@ struct PublicTabView: View {
         TabView(selection: $selectedTab) {
             HomeView(
                 onShowAllCourses: {
+                    selectedCourseID = nil
                     selectedTab = .courses
+                },
+                onShowSchedule: {
+                    selectedTab = .schedule
                 },
                 onOpenCourse: { event in
                     selectedCourseID = event.id
+                    selectedTab = .courses
+                },
+                onOpenCourseID: { eventID in
+                    selectedCourseID = eventID
                     selectedTab = .courses
                 }
             )

@@ -110,14 +110,7 @@ struct SendNotificationView: View {
             .tint(.sdsDarkModeGreen)
 
             if audience == .courseFollowers {
-                Picker("Kurs", selection: $selectedEventId) {
-                    Text("Välj kurs…").tag(Optional<Int>.none)
-                    ForEach(cogWork.events) { event in
-                        Text(event.name ?? "–").tag(Optional(event.id))
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(.sdsDarkModeGreen)
+                CourseEventPicker(title: "Kurs", selectedEventId: $selectedEventId)
             }
         }
     }
@@ -268,5 +261,22 @@ struct SendNotificationView: View {
         } catch {
             errorText = "Nätverksfel: \(error.localizedDescription)"
         }
+    }
+}
+
+struct CourseEventPicker: View {
+    @EnvironmentObject private var cogWork: CogWorkService
+    let title: String
+    @Binding var selectedEventId: Int?
+
+    var body: some View {
+        Picker(title, selection: $selectedEventId) {
+            Text("Välj kurs…").tag(Optional<Int>.none)
+            ForEach(cogWork.events) { event in
+                Text(event.name ?? "–").tag(Optional(event.id))
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(.sdsDarkModeGreen)
     }
 }
