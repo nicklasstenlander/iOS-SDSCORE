@@ -90,7 +90,9 @@ final class ScheduleService: ObservableObject {
             errorMessage = nil
             recomputeCurrentStatus()
         } catch {
+            #if DEBUG
             print("[ScheduleService] Nätverksfel: \(error.localizedDescription)")
+            #endif
             errorMessage = "Kunde inte hämta schema."
             // Retain existing events — do NOT clear on network error
         }
@@ -117,7 +119,9 @@ final class ScheduleService: ObservableObject {
         // Split on U+2013 EN DASH, NOT on U+002D HYPHEN-MINUS
         let parts = event.time.components(separatedBy: "\u{2013}")
         guard parts.count == 2 else {
+            #if DEBUG
             print("[ScheduleService] Ogiltigt tidsformat för event '\(event.eventId)': '\(event.time)'")
+            #endif
             return nil
         }
         let startStr = parts[0].trimmingCharacters(in: .whitespaces)
@@ -129,7 +133,9 @@ final class ScheduleService: ObservableObject {
             let start = Self.eventTimeFormatter.date(from: startISO),
             let end   = Self.eventTimeFormatter.date(from: endISO)
         else {
+            #if DEBUG
             print("[ScheduleService] Kunde inte parsa tider för event '\(event.eventId)': '\(startISO)' / '\(endISO)'")
+            #endif
             return nil
         }
         return (event, start, end)

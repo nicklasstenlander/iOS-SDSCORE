@@ -72,6 +72,10 @@ final class CogWorkService: ObservableObject {
             events = decoded.events?.events ?? []
             duplicateBookings = decoded.duplicates?.bookings ?? []
             lastUpdated = Date()
+        } catch is CancellationError {
+            // Task cancelled by SwiftUI lifecycle — not a user-visible error
+        } catch let urlError as URLError where urlError.code == .cancelled {
+            // URLSession cancelled by task lifecycle — not a user-visible error
         } catch {
             errorMessage = "Kunde inte hämta översiktsdata. \(error.localizedDescription)"
         }
@@ -95,6 +99,8 @@ final class CogWorkService: ObservableObject {
                 let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
                 events = decoded.events?.events ?? []
             }
+        } catch is CancellationError {
+        } catch let urlError as URLError where urlError.code == .cancelled {
         } catch {
             errorMessage = "Kunde inte hämta kurser. \(error.localizedDescription)"
         }
@@ -336,14 +342,15 @@ final class CogWorkService: ObservableObject {
     private func publicAPI<T: Decodable>(
         path: String,
         password: String? = nil,
-        extra: [String: String] = [:]
+        extra: [String: String] = [:],
+        verbose: Bool = true
     ) async throws -> T {
         var components = URLComponents(string: "\(publicBaseURL)/\(path)/")
-        var queryItems = [
-            URLQueryItem(name: "org", value: "sollentunadans"),
-            URLQueryItem(name: "verbose", value: "1"),
-            URLQueryItem(name: "maxRows", value: "1000")
-        ]
+        var queryItems: [URLQueryItem] = [URLQueryItem(name: "org", value: "sollentunadans")]
+        if verbose {
+            queryItems.append(URLQueryItem(name: "verbose", value: "1"))
+        }
+        queryItems.append(URLQueryItem(name: "maxRows", value: "1000"))
 
         let passwordValue = password ?? cogWorkPassword
         if !passwordValue.isEmpty {

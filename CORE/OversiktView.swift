@@ -9,6 +9,7 @@ struct OversiktView: View {
     @Namespace private var cardNamespace
     @State private var navigationPath: [OverviewCardID] = []
     @State private var selectedCourse: CourseOverviewData?
+    @State private var cachedOverviewCards: [OverviewCard] = []
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
     @State private var contentWidth: CGFloat = 0
@@ -88,6 +89,7 @@ struct OversiktView: View {
             .background(Color.sdsPageBackground.ignoresSafeArea())
             .refreshable {
                 await cogWork.loadAllData()
+                cachedOverviewCards = buildOverviewCards()
             }
             .task {
                 if cogWork.bookings.isEmpty {
@@ -96,12 +98,17 @@ struct OversiktView: View {
                 if goals.goals.isEmpty {
                     await goals.loadGoals()
                 }
+                cachedOverviewCards = buildOverviewCards()
             }
             .task(id: cogWork.selectedPeriod) {
                 await rebuildCourseRows()
+                cachedOverviewCards = buildOverviewCards()
             }
             .onChange(of: cogWork.lastUpdated) { _, _ in
-                Task { await rebuildCourseRows() }
+                Task {
+                    await rebuildCourseRows()
+                    cachedOverviewCards = buildOverviewCards()
+                }
             }
             .onChange(of: cogWork.selectedPeriod) { _, _ in
                 navigationPath = []
@@ -113,7 +120,7 @@ struct OversiktView: View {
                     .presentationDragIndicator(.visible)
             }
             .navigationDestination(for: OverviewCardID.self) { id in
-                if let card = overviewCards.first(where: { $0.id == id }) {
+                if let card = cachedOverviewCards.first(where: { $0.id == id }) {
                     MetricListView(
                         card: card,
                         courseRows: id == .occupancy ? cachedCourseRows : [],
@@ -543,122 +550,149 @@ struct OversiktView: View {
     }
 
     private var overviewCards: [OverviewCard] {
+        cachedOverviewCards.isEmpty ? buildOverviewCards() : cachedOverviewCards
+    }
+
+    private func buildOverviewCards() -> [OverviewCard] {
+        let stats = cogWork.statisticalPeriodBookings
+        let periodName = cogWork.selectedPeriod.displayName
+        let avgOcc = cogWork.avgOccupancyPercent
+
+        let today = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        let newToday = stats.filter { $0.created.hasPrefix(today) }.count
+        let uniqueParticipants = Set(stats.compactMap { $0.participant?.key ?? $0.participant?.name }).count
+        let uniqueCourses = Set(stats.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
+        let accepted = stats.filter(\.isAcceptedForOverview)
+        let acceptedCnt = accepted.count
+        let acceptedPct = stats.isEmpty ? 0 : Int((Double(acceptedCnt) / Double(stats.count) * 100).rounded())
+        let unpaidCnt = stats.filter { $0.payment?.paid == false }.count
+        let paidCnt = stats.filter { $0.payment?.paid == true }.count
+        let unpaidAmt = stats.filter { $0.payment?.paid == false }.compactMap { $0.payment?.priceAgreed }.reduce(0, +)
+        let invoiced = accepted.compactMap { $0.payment?.priceAgreed }.reduce(0, +)
+        let received = stats.filter { $0.payment?.paid == true }.compactMap { $0.payment?.amountPaid }.reduce(0, +)
+        let receivedPct = invoiced > 0 ? Int((received / invoiced * 100).rounded()) : 0
+        let awaitingCnt = cogWork.pendingReviewCount
+        let canonicalKeys = CourseMetricsEngine.canonicalParticipantKeys(for: accepted)
+        let activeStudents = Set(accepted.compactMap {
+            CourseMetricsEngine.canonicalParticipantIdentifier(for: $0, lookup: canonicalKeys)
+        }).count
+
         let cards: [OverviewCard] = [
             OverviewCard(
                 id: .registered,
                 title: "Anmälningar",
-                value: formatted(statisticalPeriodBookings.count),
-                subtitle: "\(uniqueParticipantCount) elever · \(uniqueCourseCount) kurser",
-                delta: newTodayCount > 0 ? "+\(newTodayCount) idag" : nil,
+                value: formatted(stats.count),
+                subtitle: "\(uniqueParticipants) elever · \(uniqueCourses) kurser",
+                delta: newToday > 0 ? "+\(newToday) idag" : nil,
                 icon: "person.2",
                 style: .violet,
                 detailTitle: "Anmälningar",
                 detailRows: [
-                    .init(label: "Totalt antal", value: formatted(statisticalPeriodBookings.count)),
-                    .init(label: "Nya idag", value: formatted(newTodayCount)),
-                    .init(label: "Unika kurser", value: formatted(uniqueCourseCount))
+                    .init(label: "Totalt antal", value: formatted(stats.count)),
+                    .init(label: "Nya idag", value: formatted(newToday)),
+                    .init(label: "Unika kurser", value: formatted(uniqueCourses))
                 ],
                 bookingFilter: .all
             ),
             OverviewCard(
                 id: .accepted,
                 title: "Antagna",
-                value: formatted(acceptedCount),
-                subtitle: statisticalPeriodBookings.isEmpty ? "Ingen data" : "\(acceptedPercent)% av anmälda",
+                value: formatted(acceptedCnt),
+                subtitle: stats.isEmpty ? "Ingen data" : "\(acceptedPct)% av anmälda",
                 icon: "person.crop.circle.badge.checkmark",
                 style: .ok,
                 detailTitle: "Antagna deltagare",
                 detailRows: [
-                    .init(label: "Antagna", value: formatted(acceptedCount)),
-                    .init(label: "Andel", value: "\(acceptedPercent)%"),
-                    .init(label: "Ej antagna/okänt", value: formatted(max(statisticalPeriodBookings.count - acceptedCount, 0)))
+                    .init(label: "Antagna", value: formatted(acceptedCnt)),
+                    .init(label: "Andel", value: "\(acceptedPct)%"),
+                    .init(label: "Ej antagna/okänt", value: formatted(max(stats.count - acceptedCnt, 0)))
                 ],
                 bookingFilter: .accepted
             ),
             OverviewCard(
                 id: .unpaid,
                 title: "Ej betalda",
-                value: formatted(unpaidCount),
-                subtitle: unpaidCount > 0 ? "Kräver åtgärd" : "Alla betalda",
+                value: formatted(unpaidCnt),
+                subtitle: unpaidCnt > 0 ? "Kräver åtgärd" : "Alla betalda",
                 icon: "creditcard",
-                style: unpaidCount > 0 ? .critical : .ok,
+                style: unpaidCnt > 0 ? .critical : .ok,
                 detailTitle: "Betalningar att följa upp",
                 detailRows: [
-                    .init(label: "Obetalda", value: formatted(unpaidCount)),
-                    .init(label: "Betalda", value: formatted(paidCount)),
-                    .init(label: "Utestående belopp", value: "\(formattedCurrency(unpaidAmount)) kr")
+                    .init(label: "Obetalda", value: formatted(unpaidCnt)),
+                    .init(label: "Betalda", value: formatted(paidCnt)),
+                    .init(label: "Utestående belopp", value: "\(formattedCurrency(unpaidAmt)) kr")
                 ],
                 bookingFilter: .unpaid
             ),
             OverviewCard(
                 id: .awaiting,
                 title: "Återkoppling",
-                value: formatted(awaitingCount),
-                subtitle: awaitingCount > 0 ? "\(awaitingCount) behöver manuell check" : "Inga ärenden",
+                value: formatted(awaitingCnt),
+                subtitle: awaitingCnt > 0 ? "\(awaitingCnt) behöver manuell check" : "Inga ärenden",
                 icon: "clock",
-                style: awaitingCount > 0 ? .warning : .ok,
+                style: awaitingCnt > 0 ? .warning : .ok,
                 detailTitle: "Väntar återkoppling",
                 detailRows: [
-                    .init(label: "Ärenden", value: formatted(awaitingCount)),
-                    .init(label: "Period", value: cogWork.selectedPeriod.displayName),
-                    .init(label: "Status", value: awaitingCount > 0 ? "Behöver åtgärd" : "Klart")
+                    .init(label: "Ärenden", value: formatted(awaitingCnt)),
+                    .init(label: "Period", value: periodName),
+                    .init(label: "Status", value: awaitingCnt > 0 ? "Behöver åtgärd" : "Klart")
                 ],
                 bookingFilter: .pendingOrAwaiting
             ),
             OverviewCard(
                 id: .courses,
                 title: "Antal elever",
-                value: formatted(activeStudentCount),
+                value: formatted(activeStudents),
                 subtitle: "unika med aktiv antagning",
                 icon: "person.3",
                 style: .sky,
                 detailTitle: "Elevunderlag",
                 detailRows: [
-                    .init(label: "Unika elever", value: formatted(activeStudentCount)),
-                    .init(label: "Aktiva antagningar", value: formatted(acceptedCount)),
-                    .init(label: "Period", value: cogWork.selectedPeriod.displayName)
+                    .init(label: "Unika elever", value: formatted(activeStudents)),
+                    .init(label: "Aktiva antagningar", value: formatted(acceptedCnt)),
+                    .init(label: "Period", value: periodName)
                 ]
             ),
             OverviewCard(
                 id: .occupancy,
                 title: "Beläggning",
-                value: cogWork.avgOccupancyPercent.map { "\($0)%" } ?? "—",
-                subtitle: cogWork.avgOccupancyPercent != nil ? "av tillgängliga platser" : "kräver kursplatser",
+                value: avgOcc.map { "\($0)%" } ?? "—",
+                subtitle: avgOcc != nil ? "av tillgängliga platser" : "kräver kursplatser",
                 icon: "chart.line.uptrend.xyaxis",
                 style: .emerald,
                 detailTitle: "Beläggning",
                 detailRows: [
-                    .init(label: "Medelbeläggning", value: cogWork.avgOccupancyPercent.map { "\($0)%" } ?? "—"),
-                    .init(label: "Period", value: cogWork.selectedPeriod.displayName),
+                    .init(label: "Medelbeläggning", value: avgOcc.map { "\($0)%" } ?? "—"),
+                    .init(label: "Period", value: periodName),
                     .init(label: "Underlag", value: "Kurser + antagna")
                 ]
             ),
             OverviewCard(
                 id: .invoiced,
                 title: "Aviserat",
-                value: revenueText(totalInvoiced),
-                subtitle: totalInvoiced > 0 ? "\(formattedCurrency(totalInvoiced)) kr" : "Ingen data",
+                value: revenueText(invoiced),
+                subtitle: invoiced > 0 ? "\(formattedCurrency(invoiced)) kr" : "Ingen data",
                 icon: "banknote",
                 style: .emerald,
                 detailTitle: "Aviserat belopp",
                 detailRows: [
-                    .init(label: "Aviserat", value: "\(formattedCurrency(totalInvoiced)) kr"),
-                    .init(label: "Mottaget", value: "\(formattedCurrency(totalReceived)) kr"),
-                    .init(label: "Mottaget aviserat", value: "\(receivedPercent)%")
+                    .init(label: "Aviserat", value: "\(formattedCurrency(invoiced)) kr"),
+                    .init(label: "Mottaget", value: "\(formattedCurrency(received)) kr"),
+                    .init(label: "Mottaget aviserat", value: "\(receivedPct)%")
                 ]
             ),
             OverviewCard(
                 id: .received,
                 title: "Mottaget",
-                value: revenueText(totalReceived),
-                subtitle: totalReceived > 0 ? "\(formattedCurrency(totalReceived)) kr" : "Ingen data",
+                value: revenueText(received),
+                subtitle: received > 0 ? "\(formattedCurrency(received)) kr" : "Ingen data",
                 icon: "banknote.fill",
                 style: .dark,
                 detailTitle: "Mottagna betalningar",
                 detailRows: [
-                    .init(label: "Mottaget", value: "\(formattedCurrency(totalReceived)) kr"),
-                    .init(label: "Betalda bokningar", value: formatted(paidCount)),
-                    .init(label: "Obetalda bokningar", value: formatted(unpaidCount))
+                    .init(label: "Mottaget", value: "\(formattedCurrency(received)) kr"),
+                    .init(label: "Betalda bokningar", value: formatted(paidCnt)),
+                    .init(label: "Obetalda bokningar", value: formatted(unpaidCnt))
                 ]
             )
         ]
@@ -1872,23 +1906,20 @@ private struct MetricListView: View {
     @State private var selectedBooking: Booking?
     @State private var selectedCourse: CourseOverviewData?
 
+    // Cached once in .task — avoids O(n) recompute on every render
+    @State private var cachedEventLookup: [String: Event] = [:]
+    @State private var cachedBookingCounts: [String: Int] = [:]
+    @State private var cachedSummaryContext: String = ""
+
+    // Pagination: reveal 25 rows at a time as user scrolls
+    private static let pageSize = 25
+    @State private var displayedCount = MetricListView.pageSize
+
     init(card: OverviewCard, courseRows: [CourseOverviewData], namespace: Namespace.ID) {
         self.card = card
         self.courseRows = courseRows
         self.namespace = namespace
         self._activeFilter = State(initialValue: MetricListFilter.defaultFor(card.bookingFilter))
-    }
-
-    private var eventLookup: [String: Event] {
-        cogWork.events.reduce(into: [:]) { lookup, event in
-            var keys = [String(event.id)]
-            if let key = event.key, !key.isEmpty { keys.append(key) }
-            for key in keys where lookup[key] == nil { lookup[key] = event }
-        }
-    }
-
-    private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
     }
 
     private var sourceBookings: [Booking] {
@@ -1906,6 +1937,14 @@ private struct MetricListView: View {
         sourceBookings
             .filter { searchText.isEmpty || matchesSearch($0) }
             .filter { activeFilter.matches($0) }
+    }
+
+    private var visibleBookings: [Booking] {
+        Array(filteredBookings.prefix(displayedCount))
+    }
+
+    private var hasMore: Bool {
+        displayedCount < filteredBookings.count
     }
 
     private func matchesSearch(_ booking: Booking) -> Bool {
@@ -1934,8 +1973,29 @@ private struct MetricListView: View {
             let totalFmt = total.formatted(.number.locale(Locale(identifier: "sv_SE")))
             return "Visar \(shownFmt) av \(totalFmt)"
         }
-        switch card.id {
-        case .registered:
+        if card.id == .registered, !cachedSummaryContext.isEmpty {
+            return cachedSummaryContext
+        }
+        let countFmt = total.formatted(.number.locale(Locale(identifier: "sv_SE")))
+        return "\(countFmt) anmälningar"
+    }
+
+    private func relatedBookings(for booking: Booking) -> [Booking] {
+        let identifier = booking.participant?.key ?? booking.participant?.name
+        return cogWork.bookings.filter { ($0.participant?.key ?? $0.participant?.name) == identifier }
+    }
+
+    private func buildCaches() {
+        let lookup = cogWork.events.reduce(into: [String: Event]()) { result, event in
+            var keys = [String(event.id)]
+            if let key = event.key, !key.isEmpty { keys.append(key) }
+            for key in keys where result[key] == nil { result[key] = event }
+        }
+        cachedEventLookup = lookup
+        cachedBookingCounts = CourseMetricsEngine.countBookingsByParticipant(
+            cogWork.bookings, eventLookup: lookup)
+
+        if card.id == .registered {
             let allStats = cogWork.statisticalPeriodBookings
             let uniqueStudents = Set(allStats.compactMap { $0.participant?.key ?? $0.participant?.name }).count
             let uniqueCourses = Set(allStats.compactMap { $0.event?.id.map(String.init) ?? $0.event?.name }).count
@@ -1943,16 +2003,8 @@ private struct MetricListView: View {
             let newToday = allStats.filter { $0.created.hasPrefix(today) }.count
             var parts = ["\(uniqueStudents) elever", "\(uniqueCourses) kurser"]
             if newToday > 0 { parts.append("\(newToday) nya idag") }
-            return parts.joined(separator: " · ")
-        default:
-            let countFmt = total.formatted(.number.locale(Locale(identifier: "sv_SE")))
-            return "\(countFmt) anmälningar"
+            cachedSummaryContext = parts.joined(separator: " · ")
         }
-    }
-
-    private func relatedBookings(for booking: Booking) -> [Booking] {
-        let identifier = booking.participant?.key ?? booking.participant?.name
-        return cogWork.bookings.filter { ($0.participant?.key ?? $0.participant?.name) == identifier }
     }
 
     var body: some View {
@@ -1973,6 +2025,9 @@ private struct MetricListView: View {
         )
         .refreshable { await cogWork.loadAllData() }
         .navigationTransition(.zoom(sourceID: card.id, in: namespace))
+        .task { buildCaches() }
+        .onChange(of: searchText) { _, _ in displayedCount = Self.pageSize }
+        .onChange(of: activeFilter) { _, _ in displayedCount = Self.pageSize }
         .sheet(item: $selectedBooking) { booking in
             BookingDetailSheet(booking: booking, relatedBookings: relatedBookings(for: booking))
         }
@@ -2001,24 +2056,40 @@ private struct MetricListView: View {
                     emptyBookingState
                 } else {
                     VStack(spacing: 0) {
-                        ForEach(filteredBookings) { booking in
+                        ForEach(visibleBookings) { booking in
                             BookingRow(
                                 booking: booking,
                                 isNewStudent: CourseMetricsEngine.isNewStudentBooking(
-                                    booking, countByParticipant: bookingCountByParticipant),
+                                    booking, countByParticipant: cachedBookingCounts),
                                 isTicketPurchase: CourseMetricsEngine.isPerformance(
-                                    booking: booking, eventLookup: eventLookup),
-                                scheduleText: booking.courseScheduleText(eventLookup: eventLookup)
+                                    booking: booking, eventLookup: cachedEventLookup),
+                                scheduleText: booking.courseScheduleText(eventLookup: cachedEventLookup)
                             )
                             .contentShape(Rectangle())
                             .onTapGesture { selectedBooking = booking }
-
-                            if booking.id != filteredBookings.last?.id {
-                                Rectangle()
-                                    .fill(Color.sdsBorder)
-                                    .frame(height: 1)
-                                    .padding(.leading, 16)
+                            .onAppear {
+                                if booking.id == visibleBookings.last?.id, hasMore {
+                                    displayedCount += Self.pageSize
+                                }
                             }
+
+                            Rectangle()
+                                .fill(Color.sdsBorder)
+                                .frame(height: 1)
+                                .padding(.leading, 16)
+                        }
+
+                        if hasMore {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                let remaining = filteredBookings.count - displayedCount
+                                Text("\(remaining) fler")
+                                    .font(SDSType.agrandir(12))
+                                    .foregroundColor(.sdsSecondaryText)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
                         }
                     }
                     .background(Color.sdsElevatedSurface)

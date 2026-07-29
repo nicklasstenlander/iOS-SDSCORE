@@ -456,29 +456,25 @@ struct CourseCatalogDetailSheet: View {
         }
     }
 
+    @ViewBuilder
     private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Kursbeskrivning")
-                .font(SDSType.agrandir(17, weight: .bold))
-                .foregroundColor(.sdsPrimaryText)
+        if let desc = event.plainDescription {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Kursbeskrivning")
+                    .font(SDSType.agrandir(17, weight: .bold))
+                    .foregroundColor(.sdsPrimaryText)
 
-            if let desc = event.plainDescription {
                 Text(desc)
                     .font(SDSType.agrandir(15))
                     .foregroundColor(.sdsSecondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Beskrivning saknas")
-                    .font(SDSType.agrandir(15))
-                    .foregroundColor(.sdsTertiaryText)
-                    .italic()
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.sdsCard)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.sdsBorder, lineWidth: 1))
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.sdsCard)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.sdsBorder, lineWidth: 1))
     }
 }
 

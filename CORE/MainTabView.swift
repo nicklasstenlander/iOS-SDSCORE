@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct AdminTabView: View {
+    // Sätt till true när flikarna är färdigbyggda för release
+    private let showUnfinishedTabs = false
+
     var body: some View {
         TabView {
             OversiktView()
@@ -180,17 +183,6 @@ struct MerView: View {
                         Label("Samtal", systemImage: WebSection.calls.icon)
                     }
 
-                    NavigationLink {
-                        WebSectionPlaceholderView(section: .narvaro)
-                    } label: {
-                        Label("Närvaro", systemImage: WebSection.narvaro.icon)
-                    }
-
-                    NavigationLink {
-                        WebSectionPlaceholderView(section: .signage)
-                    } label: {
-                        Label("Skyltning", systemImage: WebSection.signage.icon)
-                    }
 
                     if auth.isAdmin {
                         NavigationLink {
@@ -259,6 +251,19 @@ struct MerView: View {
                     Text("Data")
                 } footer: {
                     Text("Använd proxyhämtning normalt. Rensa proxy bara när du behöver tvinga fram helt färsk CogWork-data.")
+                }
+
+                Section("Konto") {
+                    Button {
+                        let subject = "Begäran om borttagning av konto"
+                        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        if let url = URL(string: "mailto:info@sollentunadansochscenskola.se?subject=\(encodedSubject)") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label("Ta bort mitt konto", systemImage: "person.crop.circle.badge.minus")
+                    }
+                    .foregroundColor(.sdsPink)
                 }
 
                 Section {

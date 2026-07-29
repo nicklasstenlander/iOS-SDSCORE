@@ -244,8 +244,11 @@ final class TelavoxService: ObservableObject {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        if T.self == EmptyTelavoxResponse.self || data.isEmpty {
+        if T.self == EmptyTelavoxResponse.self {
             return EmptyTelavoxResponse() as! T
+        }
+        if data.isEmpty {
+            throw URLError(.zeroByteResource)
         }
         return try JSONDecoder().decode(T.self, from: data)
     }
