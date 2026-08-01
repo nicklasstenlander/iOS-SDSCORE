@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject private var cogWork: CogWorkService
     @StateObject private var contentCards = ContentCardsService()
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let onShowAllCourses: () -> Void
     let onShowSchedule: () -> Void
@@ -12,6 +13,10 @@ struct HomeView: View {
     let onOpenCourseID: (Int) -> Void
     @State private var bookingURL: URL?
     @State private var showSafari = false
+
+    private var isWideLayout: Bool {
+        horizontalSizeClass == .regular || UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     private let levels: [(name: String, description: String)] = [
         ("Nivå 1", "För dig som aldrig dansat tidigare. Grundläggande teknik och rörelseglädje i ett tryggt tempo."),
@@ -139,12 +144,49 @@ struct HomeView: View {
     }
 
     private var contentCardsSection: some View {
+        Group {
+            if isWideLayout {
+                iPadNewsSection(cards: contentCards.cards)
+            } else {
+                iPhoneNewsSection
+            }
+        }
+    }
+
+    private var iPhoneNewsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             ForEach(contentCards.cards) { card in
                 ContentCardView(card: card) {
                     handleCardTap(card)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func iPadNewsSection(cards: [ContentCard]) -> some View {
+        let slots = buildCardLayout(from: cards)
+        let rows = buildCardRows(from: slots)
+        VStack(spacing: 16) {
+            ForEach(rows.indices, id: \.self) { i in
+                cardRow(rows[i])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func cardRow(_ row: CardRow) -> some View {
+        switch row {
+        case .pair(let left, let right):
+            HStack(spacing: 16) {
+                ContentCardView(card: left.card) { handleCardTap(left.card) }
+                    .frame(maxWidth: .infinity)
+                ContentCardView(card: right.card) { handleCardTap(right.card) }
+                    .frame(maxWidth: .infinity)
+            }
+        case .single(let slot):
+            ContentCardView(card: slot.card) { handleCardTap(slot.card) }
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -416,6 +458,72 @@ private struct InvertInDarkMode: ViewModifier {
             content
         }
     }
+}
+
+fileprivate enum CardLayoutSlot {
+    case half(ContentCard)
+    case full(ContentCard)
+
+    var card: ContentCard {
+        switch self {
+        case .half(let c), .full(let c): return c
+        }
+    }
+}
+
+fileprivate enum CardRow {
+    case pair(CardLayoutSlot, CardLayoutSlot)
+    case single(CardLayoutSlot)
+}
+
+fileprivate func buildCardLayout(from cards: [ContentCard]) -> [CardLayoutSlot] {
+    guard cards.count % 2 != 0 else {
+        return cards.map { .half($0) }
+    }
+
+    var workingCards = cards
+
+    if let lastCard = workingCards.last,
+       lastCard.imageUrl == nil || lastCard.imageUrl?.isEmpty == true {
+        return buildSlots(from: workingCards, fullWidthIndex: workingCards.count - 1)
+    }
+
+    if let indexWithoutImage = workingCards.lastIndex(where: {
+        $0.imageUrl == nil || $0.imageUrl?.isEmpty == true
+    }) {
+        let card = workingCards.remove(at: indexWithoutImage)
+        workingCards.append(card)
+        return buildSlots(from: workingCards, fullWidthIndex: workingCards.count - 1)
+    }
+
+    return workingCards.map { .half($0) }
+}
+
+fileprivate func buildSlots(from cards: [ContentCard], fullWidthIndex: Int) -> [CardLayoutSlot] {
+    cards.enumerated().map { index, card in
+        index == fullWidthIndex ? .full(card) : .half(card)
+    }
+}
+
+fileprivate func buildCardRows(from slots: [CardLayoutSlot]) -> [CardRow] {
+    var rows: [CardRow] = []
+    var i = 0
+    while i < slots.count {
+        switch slots[i] {
+        case .full:
+            rows.append(.single(slots[i]))
+            i += 1
+        case .half:
+            if i + 1 < slots.count, case .half = slots[i + 1] {
+                rows.append(.pair(slots[i], slots[i + 1]))
+                i += 2
+            } else {
+                rows.append(.single(slots[i]))
+                i += 1
+            }
+        }
+    }
+    return rows
 }
 
 #Preview {
