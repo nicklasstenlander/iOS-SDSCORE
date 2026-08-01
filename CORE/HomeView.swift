@@ -316,6 +316,22 @@ private struct ContentCardView: View {
     let card: ContentCard
     let onTap: () -> Void
 
+    @ViewBuilder
+    private func cardImage(_ card: ContentCard) -> some View {
+        if let urlString = card.imageUrl, !urlString.isEmpty, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    Color.sdsLightGreen
+                }
+            }
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
     private var showsLinkButton: Bool {
         guard let label = card.linkLabel, !label.isEmpty else { return false }
         if let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -327,18 +343,7 @@ private struct ContentCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if card.type == "event", let imageUrl = card.imageUrl, let url = URL(string: imageUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Color.sdsLightGreen
-                    }
-                }
-                .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
+            cardImage(card)
 
             Text(card.title)
                 .font(SDSType.agrandir(card.type == "banner" ? 21 : 18, weight: .bold))
