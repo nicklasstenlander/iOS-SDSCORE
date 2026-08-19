@@ -74,7 +74,7 @@ struct HomeView: View {
         }
         .background(Color.sdsPublicBackground.ignoresSafeArea())
         .task {
-            await contentCards.loadCards()
+            await contentCards.loadCardsIfNeeded()
             if cogWork.events.isEmpty {
                 await cogWork.loadEvents()
             }

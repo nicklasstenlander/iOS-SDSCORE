@@ -61,7 +61,20 @@ final class ContentCardsService: ObservableObject {
     private let supabaseURL = "https://vuokkdtyhmhkvfizsnwm.supabase.co"
     private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1b2trZHR5aG1oa3ZmaXpzbndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjEzMDAsImV4cCI6MjA5ODM5NzMwMH0.n4LdnB4n_J3zqgzo6wLg3oZsdQtZobLoC-VA4X-S9qw"
 
+    private var lastFetch: Date?
+    private let cacheLifetime: TimeInterval = 300
+
     // MARK: - Public (anon) — används av HomeView, rör inte
+
+    func loadCardsIfNeeded(force: Bool = false) async {
+        if !force,
+           let last = lastFetch,
+           Date().timeIntervalSince(last) < cacheLifetime,
+           !cards.isEmpty {
+            return
+        }
+        await loadCards()
+    }
 
     func loadCards() async {
         isLoading = true
@@ -99,6 +112,7 @@ final class ContentCardsService: ObservableObject {
                 return
             }
             cards = try JSONDecoder().decode([ContentCard].self, from: data)
+            lastFetch = Date()
         } catch {
             errorMessage = "Kunde inte hämta nyheter. \(error.localizedDescription)"
         }

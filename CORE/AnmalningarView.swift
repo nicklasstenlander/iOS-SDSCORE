@@ -24,8 +24,7 @@ struct AnmalningarView: View {
     }
 
     private var statisticalPeriodBookings: [Booking] {
-        let lookup = eventLookup
-        return periodBookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
+        cogWork.statisticalPeriodBookings
     }
 
     private var paidCount: Int { statisticalPeriodBookings.filter(\.isPaid).count }
@@ -33,20 +32,10 @@ struct AnmalningarView: View {
     private var partialCount: Int { statisticalPeriodBookings.filter(\.isPartiallyPaid).count }
 
     private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
+        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: cogWork.eventLookup)
     }
 
-    private var eventLookup: [String: Event] {
-        cogWork.events.reduce(into: [:]) { lookup, event in
-            var keys = [String(event.id)]
-            if let key = event.key, !key.isEmpty {
-                keys.append(key)
-            }
-            for key in keys where lookup[key] == nil {
-                lookup[key] = event
-            }
-        }
-    }
+    private var eventLookup: [String: Event] { cogWork.eventLookup }
 
     var body: some View {
         NavigationStack {

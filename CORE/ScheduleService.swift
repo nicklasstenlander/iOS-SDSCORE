@@ -71,7 +71,7 @@ final class ScheduleService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
 
-        var comps = URLComponents(string: scheduleProxyURL)!
+        guard var comps = URLComponents(string: scheduleProxyURL) else { return }
         comps.queryItems = [
             URLQueryItem(name: "action", value: "events_by_date"),
             URLQueryItem(name: "date", value: dateStr)

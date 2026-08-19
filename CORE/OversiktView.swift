@@ -39,17 +39,7 @@ struct OversiktView: View {
         )
     }
 
-    private var eventLookup: [String: Event] {
-        cogWork.events.reduce(into: [:]) { lookup, event in
-            var keys = [String(event.id)]
-            if let key = event.key, !key.isEmpty {
-                keys.append(key)
-            }
-            for key in keys where lookup[key] == nil {
-                lookup[key] = event
-            }
-        }
-    }
+    private var eventLookup: [String: Event] { cogWork.eventLookup }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {

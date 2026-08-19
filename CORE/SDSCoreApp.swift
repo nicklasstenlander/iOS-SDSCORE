@@ -45,6 +45,8 @@ struct RootView: View {
         }
         .task {
             syncDebugCogWorkPasswordIfNeeded()
+            // Icke-blockerande förhämtning av appdata parallellt med auth
+            Task { await cogWork.loadAllDataIfNeeded() }
         }
         .onChange(of: auth.isAuthenticated) { _, _ in
             syncDebugCogWorkPasswordIfNeeded()

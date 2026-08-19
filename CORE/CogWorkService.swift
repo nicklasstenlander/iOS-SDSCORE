@@ -16,7 +16,12 @@ final class CogWorkService: ObservableObject {
     @Published var isLoadingUsers = false
     @Published var errorMessage: String?
     @Published var lastUpdated: Date?
-    @Published var selectedPeriod = Periods.defaultPeriod()
+    @Published var selectedPeriod = Periods.defaultPeriod() {
+        didSet { if oldValue != selectedPeriod { recomputeDerivedValues() } }
+    }
+
+    private var lastFetch: Date?
+    private let cacheLifetime: TimeInterval = 300
 
     var cogWorkPassword: String {
         get {
@@ -28,6 +33,19 @@ final class CogWorkService: ObservableObject {
             objectWillChange.send()
             UserDefaults.standard.set(newValue, forKey: "sds_core_cogwork_password")
         }
+    }
+
+    /// Hämtar all data om cachen är äldre än 5 min eller om data saknas. Anropa force: true för pull-to-refresh.
+    func loadAllDataIfNeeded(force: Bool = false) async {
+        if !force {
+            guard !isLoading else { return }
+            if let last = lastFetch,
+               Date().timeIntervalSince(last) < cacheLifetime,
+               !bookings.isEmpty {
+                return
+            }
+        }
+        await loadAllData()
     }
 
     /// Hämtar alla bokningar (aggregerat över terminer via Workerns cache).
@@ -47,6 +65,7 @@ final class CogWorkService: ObservableObject {
             let decoded = try JSONDecoder().decode(BookingsResponse.self, from: data)
             bookings = decoded.bookings
             lastUpdated = Date()
+            recomputeDerivedValues()
         } catch {
             errorMessage = "Kunde inte hämta anmälningar. \(error.localizedDescription)"
         }
@@ -72,6 +91,8 @@ final class CogWorkService: ObservableObject {
             events = decoded.events?.events ?? []
             duplicateBookings = decoded.duplicates?.bookings ?? []
             lastUpdated = Date()
+            lastFetch = Date()
+            recomputeDerivedValues()
         } catch is CancellationError {
             // Task cancelled by SwiftUI lifecycle — not a user-visible error
         } catch let urlError as URLError where urlError.code == .cancelled {
@@ -87,9 +108,10 @@ final class CogWorkService: ObservableObject {
         defer { isLoadingEvents = false }
 
         do {
+            let loadedEvents: [Event]
             if hasCogWorkPassword {
                 let response: EventsResponse = try await publicAPI(path: "events", extra: eventBlockId.map { ["eventBlockId": $0] } ?? [:])
-                events = response.events
+                loadedEvents = response.events
             } else {
                 var queryItems = [URLQueryItem(name: "type", value: "all")]
                 if let eventBlockId, !eventBlockId.isEmpty {
@@ -97,8 +119,10 @@ final class CogWorkService: ObservableObject {
                 }
                 let data = try await proxyData(queryItems: queryItems)
                 let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
-                events = decoded.events?.events ?? []
+                loadedEvents = decoded.events?.events ?? []
             }
+            events = loadedEvents
+            recomputeDerivedValues()
         } catch is CancellationError {
         } catch let urlError as URLError where urlError.code == .cancelled {
         } catch {
@@ -198,35 +222,33 @@ final class CogWorkService: ObservableObject {
             events = decoded.events?.events ?? []
             duplicateBookings = decoded.duplicates?.bookings ?? []
             lastUpdated = Date()
+            lastFetch = Date()
+            recomputeDerivedValues()
         } catch {
             errorMessage = "Kunde inte rensa cache och hämta ny data. \(error.localizedDescription)"
         }
     }
 
-    // MARK: - Härledda värden för Översikt
+    // MARK: - Cachade härledda värden (beräknas en gång vid dataändring/periodbyte)
 
-    var periodBookings: [Booking] {
-        bookings.filter { Periods.matches($0, period: selectedPeriod) }
-    }
+    @Published private(set) var periodBookings: [Booking] = []
+    @Published private(set) var statisticalPeriodBookings: [Booking] = []
+    @Published private(set) var statisticalPeriodEvents: [Event] = []
+    @Published private(set) var eventLookup: [String: Event] = [:]
 
-    var statisticalPeriodBookings: [Booking] {
-        let lookup = eventLookup
-        return periodBookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
-    }
-
-    var statisticalPeriodEvents: [Event] {
-        events.filter { Periods.matches($0, period: selectedPeriod) && CourseMetricsEngine.isStatisticalEvent($0) }
-    }
-
-    private var eventLookup: [String: Event] {
-        events.reduce(into: [:]) { lookup, event in
+    private func recomputeDerivedValues() {
+        let lookup: [String: Event] = events.reduce(into: [:]) { result, event in
             var keys = [String(event.id)]
-            if let key = event.key, !key.isEmpty {
-                keys.append(key)
-            }
-            for key in keys where lookup[key] == nil {
-                lookup[key] = event
-            }
+            if let key = event.key, !key.isEmpty { keys.append(key) }
+            for key in keys where result[key] == nil { result[key] = event }
+        }
+        eventLookup = lookup
+        periodBookings = bookings.filter { Periods.matches($0, period: selectedPeriod) }
+        statisticalPeriodBookings = periodBookings.filter {
+            CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup)
+        }
+        statisticalPeriodEvents = events.filter {
+            Periods.matches($0, period: selectedPeriod) && CourseMetricsEngine.isStatisticalEvent($0)
         }
     }
 
