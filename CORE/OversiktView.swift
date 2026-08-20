@@ -88,21 +88,28 @@ struct OversiktView: View {
                 if goals.goals.isEmpty {
                     await goals.loadGoals()
                 }
-                cachedOverviewCards = buildOverviewCards()
+                // Bygg bara om om cacharna är tomma — hoppa över vid tab-byten
+                if cachedCourseRows.isEmpty {
+                    await rebuildCourseRows()
+                }
+                if cachedOverviewCards.isEmpty {
+                    cachedOverviewCards = buildOverviewCards()
+                }
             }
-            .task(id: cogWork.selectedPeriod) {
-                await rebuildCourseRows()
-                cachedOverviewCards = buildOverviewCards()
+            .onChange(of: cogWork.selectedPeriod) { _, _ in
+                // Periodbyte: rensa navigering och bygg om allt
+                navigationPath = []
+                selectedCourse = nil
+                Task {
+                    await rebuildCourseRows()
+                    cachedOverviewCards = buildOverviewCards()
+                }
             }
             .onChange(of: cogWork.lastUpdated) { _, _ in
                 Task {
                     await rebuildCourseRows()
                     cachedOverviewCards = buildOverviewCards()
                 }
-            }
-            .onChange(of: cogWork.selectedPeriod) { _, _ in
-                navigationPath = []
-                selectedCourse = nil
             }
             .sheet(item: $selectedCourse) { course in
                 CourseDetailSheet(course: course)

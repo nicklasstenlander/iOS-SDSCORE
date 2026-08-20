@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 /// Minimal Supabase Auth-klient via REST, utan externa beroenden.
 /// Använder samma projekt som CORE-webbappen (sds-dashboard).
@@ -50,6 +51,7 @@ final class SupabaseAuthService: ObservableObject {
             if http.statusCode == 200 {
                 let decoded = try JSONDecoder().decode(AuthTokenResponse.self, from: data)
                 storeSession(decoded)
+                await dismissAnyPresentedViewController()
                 isAuthenticated = true
                 await loadProfile(userId: decoded.user.id)
             } else {
@@ -71,7 +73,8 @@ final class SupabaseAuthService: ObservableObject {
         _ = try? await URLSession.shared.data(for: request)
     }
 
-    func signOut() {
+    func signOut() async {
+        await dismissAnyPresentedViewController()
         refreshTask?.cancel()
         refreshTask = nil
         accessToken = nil
@@ -81,6 +84,22 @@ final class SupabaseAuthService: ObservableObject {
         UserDefaults.standard.removeObject(forKey: refreshKey)
         UserDefaults.standard.removeObject(forKey: userIdKey)
         UserDefaults.standard.removeObject(forKey: expiresAtKey)
+    }
+
+    // Stänger alla presenterade vyer (sheets, fullScreenCovers) innan
+    // SwiftUI byter Group-gren (publik ↔ admin). Utan detta rivs den
+    // UIKit-presentationen ned mot ett ogiltigt presentingViewController
+    // och crashar.
+    private func dismissAnyPresentedViewController() async {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let root = scene.keyWindow?.rootViewController,
+              root.presentedViewController != nil else { return }
+
+        await withCheckedContinuation { continuation in
+            root.dismiss(animated: false) { continuation.resume() }
+        }
     }
 
     // MARK: - Sessionsåterställning
@@ -98,10 +117,10 @@ final class SupabaseAuthService: ObservableObject {
                 isAuthenticated = true
                 await loadProfile(userId: userId)
             } else {
-                signOut()
+                await signOut()
             }
         } catch {
-            signOut()
+            await signOut()
         }
     }
 
@@ -112,7 +131,7 @@ final class SupabaseAuthService: ObservableObject {
             let data = try await authenticatedProfileData(userId: userId)
             profile = try? JSONDecoder().decode(UserProfile.self, from: data)
         } catch AuthSessionError.unauthorized {
-            signOut()
+            await signOut()
         } catch {
             // Profilen är icke-kritisk, men sessionsfel hanteras separat ovan.
         }
@@ -179,7 +198,7 @@ final class SupabaseAuthService: ObservableObject {
             return token
         } catch {
             refreshTask = nil
-            signOut()
+            await signOut()
             throw error
         }
     }

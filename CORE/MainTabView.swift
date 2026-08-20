@@ -268,7 +268,7 @@ struct MerView: View {
 
                 Section {
                     Button {
-                        auth.signOut()
+                        Task { await auth.signOut() }
                     } label: {
                         Label("Visa publik vy", systemImage: "eye")
                     }
@@ -313,7 +313,7 @@ struct MerView: View {
                         Divider()
 
                         Button(role: .destructive) {
-                            auth.signOut()
+                            Task { await auth.signOut() }
                         } label: {
                             Label("Logga ut", systemImage: "arrow.right.square")
                         }
