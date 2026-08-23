@@ -31,10 +31,6 @@ struct AnmalningarView: View {
     private var unpaidCount: Int { statisticalPeriodBookings.filter(\.isUnpaid).count }
     private var partialCount: Int { statisticalPeriodBookings.filter(\.isPartiallyPaid).count }
 
-    private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: cogWork.eventLookup)
-    }
-
     private var eventLookup: [String: Event] { cogWork.eventLookup }
 
     var body: some View {
@@ -227,7 +223,7 @@ struct AnmalningarView: View {
     }
 
     private func isNewStudent(_ booking: Booking) -> Bool {
-        CourseMetricsEngine.isNewStudentBooking(booking, countByParticipant: bookingCountByParticipant)
+        CourseMetricsEngine.isNewStudentBooking(booking, countByParticipant: cogWork.bookingCountByParticipant)
     }
 
     private func isTicketPurchase(_ booking: Booking) -> Bool {

@@ -235,6 +235,8 @@ final class CogWorkService: ObservableObject {
     @Published private(set) var statisticalPeriodBookings: [Booking] = []
     @Published private(set) var statisticalPeriodEvents: [Event] = []
     @Published private(set) var eventLookup: [String: Event] = [:]
+    @Published private(set) var bookingCountByParticipant: [String: Int] = [:]
+    @Published private(set) var courseChangesByParticipant: [String: ParticipantCourseChange] = [:]
 
     private func recomputeDerivedValues() {
         let lookup: [String: Event] = events.reduce(into: [:]) { result, event in
@@ -250,6 +252,12 @@ final class CogWorkService: ObservableObject {
         statisticalPeriodEvents = events.filter {
             Periods.matches($0, period: selectedPeriod) && CourseMetricsEngine.isStatisticalEvent($0)
         }
+        bookingCountByParticipant = CourseMetricsEngine.countBookingsByParticipant(bookings, eventLookup: lookup)
+        courseChangesByParticipant = CourseMetricsEngine.courseChangesByParticipant(
+            bookings: bookings,
+            currentPeriodCode: selectedPeriod.codePrefix,
+            eventLookup: lookup
+        )
     }
 
     var totalCount: Int { statisticalPeriodBookings.count }

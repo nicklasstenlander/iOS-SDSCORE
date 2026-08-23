@@ -16,29 +16,12 @@ struct OversiktView: View {
     @State private var cachedCourseRows: [CourseOverviewData] = []
     @State private var isRefreshingCourseRows = false
     @State private var goalEditorMode: GoalEditorMode?
+    @State private var rebuildTask: Task<Void, Never>?
 
     private var periods: [Period] { Periods.available }
 
-    private var periodBookings: [Booking] {
-        cogWork.periodBookings
-    }
-
-    private var statisticalPeriodBookings: [Booking] {
-        cogWork.statisticalPeriodBookings
-    }
-
-    private var bookingCountByParticipant: [String: Int] {
-        CourseMetricsEngine.countBookingsByParticipant(cogWork.bookings, eventLookup: eventLookup)
-    }
-
-    private var courseChangesByParticipant: [String: ParticipantCourseChange] {
-        CourseMetricsEngine.courseChangesByParticipant(
-            bookings: cogWork.bookings,
-            currentPeriodCode: cogWork.selectedPeriod.codePrefix,
-            eventLookup: eventLookup
-        )
-    }
-
+    private var periodBookings: [Booking] { cogWork.periodBookings }
+    private var statisticalPeriodBookings: [Booking] { cogWork.statisticalPeriodBookings }
     private var eventLookup: [String: Event] { cogWork.eventLookup }
 
     var body: some View {
@@ -100,13 +83,15 @@ struct OversiktView: View {
                 // Periodbyte: rensa navigering och bygg om allt
                 navigationPath = []
                 selectedCourse = nil
-                Task {
+                rebuildTask?.cancel()
+                rebuildTask = Task {
                     await rebuildCourseRows()
                     cachedOverviewCards = buildOverviewCards()
                 }
             }
             .onChange(of: cogWork.lastUpdated) { _, _ in
-                Task {
+                rebuildTask?.cancel()
+                rebuildTask = Task {
                     await rebuildCourseRows()
                     cachedOverviewCards = buildOverviewCards()
                 }
@@ -139,9 +124,17 @@ struct OversiktView: View {
         try? await Task.sleep(for: .milliseconds(100))
         guard !Task.isCancelled else { return }
 
-        let rows = await Task.detached(priority: .userInitiated) {
+        let detachedTask = Task.detached(priority: .userInitiated) {
             OversiktView.buildCourseRowsBackground(bookings: bookings, events: events, period: period)
-        }.value
+        }
+
+        // Om föräldratasken avbryts (tab-byte, periodbyte, app stängs): avbryt detached-tasken
+        // direkt i stället för att vänta på att en potentiellt sekund-lång beräkning ska slutföras.
+        let rows = await withTaskCancellationHandler {
+            await detachedTask.value
+        } onCancel: {
+            detachedTask.cancel()
+        }
 
         guard !Task.isCancelled else { return }
         cachedCourseRows = rows
@@ -718,7 +711,7 @@ struct OversiktView: View {
             return 0
         case .newStudents:
             return Double(bookings.filter {
-                CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: bookingCountByParticipant)
+                CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: cogWork.bookingCountByParticipant)
             }.count)
         }
     }
@@ -745,9 +738,8 @@ struct OversiktView: View {
     }
 
     private var newStudentCount: Int {
-        let counts = bookingCountByParticipant
-        return statisticalPeriodBookings.filter {
-            CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: counts)
+        statisticalPeriodBookings.filter {
+            CourseMetricsEngine.isNewStudentBooking($0, countByParticipant: cogWork.bookingCountByParticipant)
         }.count
     }
 
