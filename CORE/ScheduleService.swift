@@ -18,6 +18,7 @@ final class ScheduleService: ObservableObject {
     @Published var errorMessage: String?
     @Published var displayedDate = Date()
     @Published var ongoingEvent: ScheduleEvent?
+    @Published var ongoingEvents: [ScheduleEvent] = []
     @Published var nextEvent: ScheduleEvent?
 
     private var fetchPollTask: Task<Void, Never>?
@@ -102,11 +103,15 @@ final class ScheduleService: ObservableObject {
         let now = Date()
         let timed = events.compactMap { parseEventTimes($0) }
 
+        let ongoing = timed.filter { $0.1 <= now && now < $0.2 }
+
         // Among overlapping ongoing events, keep the one that started most recently
-        ongoingEvent = timed
-            .filter { $0.1 <= now && now < $0.2 }
+        ongoingEvent = ongoing
             .max(by: { $0.1 < $1.1 })
             .map { $0.0 }
+
+        // All pass that are currently running, e.g. parallel classes in Light Box and Black Box
+        ongoingEvents = ongoing.map { $0.0 }
 
         nextEvent = timed
             .filter { $0.1 > now }

@@ -170,8 +170,8 @@ struct TodayScheduleView: View {
             ForEach(service.events) { event in
                 ScheduleEventCard(
                     event: event,
-                    isOngoing: service.ongoingEvent?.id == event.id,
-                    isNext: service.ongoingEvent == nil && service.nextEvent?.id == event.id,
+                    isOngoing: service.ongoingEvents.contains { $0.id == event.id },
+                    isNext: service.ongoingEvents.isEmpty && service.nextEvent?.id == event.id,
                     mode: mode
                 )
             }
