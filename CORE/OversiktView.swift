@@ -1510,20 +1510,19 @@ private struct CourseOverviewRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(row.name)
                             .font(SDSType.agrandir(15, weight: .bold))
                             .foregroundColor(.sdsPrimaryText)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
 
                         if !row.meta.isEmpty {
                             Text(row.meta)
                                 .font(SDSType.agrandir(12))
                                 .foregroundColor(.sdsSecondaryText)
-                                .lineLimit(2)
+                                .lineLimit(1)
                         }
                     }
 
@@ -1532,14 +1531,28 @@ private struct CourseOverviewRow: View {
                     SDSBadge(text: row.status.title, color: row.status.background, textColor: row.status.foreground)
                 }
 
-                LazyVGrid(columns: metricColumns, spacing: 8) {
-                    CourseMiniMetric(title: "Antagna/platser", value: row.acceptedCapacityText)
-                    CourseMiniMetric(title: "Beläggning", value: "\(row.occupancyPercent)%")
-                    CourseMiniMetric(title: "Intäkt", value: row.revenueText)
-                    CourseMiniMetric(title: "Obetalda", value: "\(row.unpaid)", tint: row.unpaid > 0 ? .sdsPink : .sdsDarkModeGreen)
+                HStack(spacing: 10) {
+                    Text(row.acceptedCapacityText)
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(.sdsPrimaryText)
+                        .lineLimit(1)
+
+                    CourseOccupancyBar(percent: row.occupancyPercent)
+                        .frame(width: 56, height: 6)
+
+                    Text("\(row.occupancyPercent)%")
+                        .font(SDSType.agrandir(11))
+                        .foregroundColor(.sdsSecondaryText)
+
+                    Spacer(minLength: 8)
+
+                    Text("Obetalda \(row.unpaid)")
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(row.unpaid > 0 ? .sdsPink : .sdsSecondaryText)
+                        .lineLimit(1)
                 }
             }
-            .padding(16)
+            .padding(14)
             .background(Color.sdsElevatedSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
@@ -1549,9 +1562,20 @@ private struct CourseOverviewRow: View {
         }
         .buttonStyle(.plain)
     }
+}
 
-    private var metricColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+private struct CourseOccupancyBar: View {
+    let percent: Int
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.sdsSubtleSurface)
+                Capsule()
+                    .fill(percent >= 100 ? Color.sdsPink : Color.sdsDarkModeGreen)
+                    .frame(width: geometry.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+            }
+        }
     }
 }
 
@@ -1599,31 +1623,6 @@ private struct CourseParticipantRow: View {
         participant.booking.participant?.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? participant.booking.participant?.name ?? "Okänd deltagare"
             : "Okänd deltagare"
-    }
-}
-
-private struct CourseMiniMetric: View {
-    let title: String
-    let value: String
-    var tint: Color = .sdsPrimaryText
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(SDSType.agrandir(10, weight: .bold))
-                .foregroundColor(.sdsSecondaryText)
-                .lineLimit(1)
-            Text(value)
-                .font(SDSType.agrandir(14, weight: .bold))
-                .foregroundColor(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .background(Color.sdsSubtleSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -1767,10 +1766,6 @@ private struct CourseOverviewData: Identifiable {
     let paid: Int
     let participants: [CourseParticipantData]
     let status: CourseOverviewStatus
-
-    var revenueText: String {
-        revenue > 0 ? "\(Int(revenue / 1000)) tkr" : "—"
-    }
 
     var acceptedCapacityText: String {
         guard let capacity, capacity > 0 else { return "\(accepted)/—" }
