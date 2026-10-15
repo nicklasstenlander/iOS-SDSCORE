@@ -73,7 +73,18 @@ struct CourseCatalogView: View {
         let grouped = Dictionary(grouping: filteredEvents) { $0.categoryName }
         return grouped
             .sorted { $0.key < $1.key }
-            .map { (category: $0.key, events: $0.value.sorted { ($0.name ?? "") < ($1.name ?? "") }) }
+            .map { (category: $0.key, events: $0.value.sorted(by: eventSortedBeforeInSection)) }
+    }
+
+    // Samma kursnamn inom en sektion sorteras efter veckodag + starttid, så "Jazz & Balett 55+" tis/tors inte blandas slumpmässigt
+    private func eventSortedBeforeInSection(_ lhs: Event, _ rhs: Event) -> Bool {
+        let nameL = lhs.name ?? ""
+        let nameR = rhs.name ?? ""
+        if nameL != nameR { return nameL < nameR }
+        let keyL = lhs.scheduleSortKey
+        let keyR = rhs.scheduleSortKey
+        if keyL.0 != keyR.0 { return keyL.0 < keyR.0 }
+        return keyL.1 < keyR.1
     }
 
     var body: some View {
@@ -252,8 +263,8 @@ private struct CatalogCourseRow: View {
                 HStack(spacing: 8) {
                     if let time = event.schedule?.dayAndTimeInfo {
                         Text(time)
-                            .font(SDSType.agrandir(12))
-                            .foregroundColor(.sdsSecondaryText)
+                            .font(SDSType.agrandir(13, weight: .semibold))
+                            .foregroundColor(.sdsPrimaryText)
                     }
                     if let place = event.place, !place.isEmpty {
                         Text("·")

@@ -591,6 +591,13 @@ extension Event {
         return "\(Int(price)) \(pricing?.currency ?? "SEK")"
     }
 
+    // (veckodag 1=mån...7=sön, starttid "HH:mm:ss") — saknad info sorteras sist
+    var scheduleSortKey: (Int, String) {
+        let day = schedule?.start?.dayOfWeek.flatMap(Int.init) ?? 8
+        let time = schedule?.start?.time ?? "99:99:99"
+        return (day, time)
+    }
+
     var occupancyPercent: Double? {
         guard let accepted = statistics?.accepted,
               let max = requirements?.maxParticipants,
