@@ -135,6 +135,21 @@ struct AnmalningarView: View {
         }
     }
 
+    // filteredBookings är redan sorterad nyast-först, så lika dagar hamnar i sammanhängande block —
+    // det räcker att gruppera grannvis istället för Dictionary(grouping:), som inte bevarar ordningen.
+    private var groupedBookings: [(key: String, bookings: [Booking])] {
+        var groups: [(key: String, bookings: [Booking])] = []
+        for booking in filteredBookings {
+            let key = booking.formattedCreatedDate
+            if groups.indices.last.map({ groups[$0].key }) == key {
+                groups[groups.count - 1].bookings.append(booking)
+            } else {
+                groups.append((key: key, bookings: [booking]))
+            }
+        }
+        return groups
+    }
+
     private var summaryTitle: String {
         if filteredBookings.count < periodBookings.count {
             return "\(filteredBookings.count) av \(periodBookings.count) anmälningar"
@@ -179,27 +194,44 @@ struct AnmalningarView: View {
                 .foregroundColor(.sdsMutedText)
                 .frame(maxWidth: .infinity, minHeight: 220)
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredBookings) { booking in
-                    BookingRow(
-                        booking: booking,
-                        isNewStudent: isNewStudent(booking),
-                        isTicketPurchase: isTicketPurchase(booking),
-                        scheduleText: scheduleText(for: booking)
-                    )
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedBooking = booking }
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedBookings, id: \.key) { group in
+                    Section {
+                        ForEach(group.bookings) { booking in
+                            BookingRow(
+                                booking: booking,
+                                isNewStudent: isNewStudent(booking),
+                                isTicketPurchase: isTicketPurchase(booking),
+                                scheduleText: scheduleText(for: booking),
+                                showsDate: false
+                            )
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedBooking = booking }
 
-                    if booking.id != filteredBookings.last?.id {
-                        Rectangle()
-                            .fill(Color.sdsLightGreen)
-                            .opacity(0.55)
-                            .frame(height: 1)
-                            .padding(.leading, 16)
+                            if booking.id != group.bookings.last?.id {
+                                Rectangle()
+                                    .fill(Color.sdsLightGreen)
+                                    .opacity(0.55)
+                                    .frame(height: 1)
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    } header: {
+                        dateSectionHeader(group.key)
                     }
                 }
             }
         }
+    }
+
+    private func dateSectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(SDSType.agrandir(12, weight: .bold))
+            .foregroundColor(.sdsSecondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.sdsElevatedSurface)
     }
 
     private func filterScroller<Data: RandomAccessCollection, Content: View>(
@@ -267,12 +299,15 @@ struct BookingRow: View {
     let isNewStudent: Bool
     let isTicketPurchase: Bool
     let scheduleText: String?
+    var showsDate: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(booking.formattedCreatedDate)
-                .font(SDSType.agrandir(12))
-                .foregroundColor(.sdsMutedText)
+            if showsDate {
+                Text(booking.formattedCreatedDate)
+                    .font(SDSType.agrandir(12))
+                    .foregroundColor(.sdsMutedText)
+            }
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
