@@ -757,6 +757,7 @@ struct OversiktView: View {
         switch courseSort {
         case .attention:
             return rows.sorted {
+                if $0.overdue != $1.overdue { return $0.overdue > $1.overdue }
                 if $0.unpaid == $1.unpaid { return $0.registered > $1.registered }
                 return $0.unpaid > $1.unpaid
             }
@@ -827,6 +828,7 @@ private extension OversiktView {
         let unpaid = statistical.filter { $0.payment?.paid == false }.count
         let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
         let paid = statistical.filter { $0.payment?.paid == true }.count
+        let overdue = statistical.filter { $0.daysOverdue > 0 }.count
         let maxParticipants = event?.requirements?.maxParticipants
         let pct = maxParticipants.map { capacity in
             capacity > 0 ? Int((Double(accepted) / Double(capacity) * 100).rounded()) : 0
@@ -843,7 +845,8 @@ private extension OversiktView {
             }
 
         let status: CourseOverviewStatus
-        if unpaid > 0 { status = .attention }
+        // "Följ upp" bara när något faktiskt har förfallit – annars hamnar nästan alla kurser där.
+        if overdue > 0 { status = .attention }
         else if statistical.isEmpty { status = .neutral }
         else if let maxParticipants, maxParticipants > 0 {
             let ratio = Double(accepted) / Double(maxParticipants)
@@ -863,6 +866,7 @@ private extension OversiktView {
             occupancyPercent: pct,
             revenue: revenue,
             unpaid: unpaid,
+            overdue: overdue,
             paid: paid,
             participants: participants,
             status: status
@@ -885,26 +889,39 @@ private extension OversiktView {
         if let event {
             let blockLabel = event.grouping?.eventBlock?.name.map(Periods.blockNameToFullLabel)
             let periodLabel = compactPeriodLabel(blockLabel)
-            let startParts = [event.schedule?.start?.date, event.schedule?.start?.time]
-                .compactMap { value -> String? in
-                    guard let value, !value.isEmpty else { return nil }
-                    return value
-                }
-            return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+            let start = formatStart(date: event.schedule?.start?.date, time: event.schedule?.start?.time)
+            return [periodLabel, start]
                 .compactMap { $0 }
                 .joined(separator: " · ")
         }
 
         guard let fallbackBooking else { return "" }
         let periodLabel = compactPeriodLabel(fallbackBooking.overviewPeriodLabel)
-        let startParts = [fallbackBooking.event?.startDate, fallbackBooking.event?.startTime]
-            .compactMap { value -> String? in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
-        return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+        let start = formatStart(date: fallbackBooking.event?.startDate, time: fallbackBooking.event?.startTime)
+        return [periodLabel, start]
             .compactMap { $0 }
             .joined(separator: " · ")
+    }
+
+    /// "2026-08-31" + "17:15:00" → "mån 31 aug 17.15". Faller tillbaka på råtexten om datumet inte går att tolka.
+    private nonisolated static func formatStart(date: String?, time: String?) -> String? {
+        let dateText = date?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let timeText = time?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let raw = [dateText, timeText].filter { !$0.isEmpty }.joined(separator: " ")
+
+        let dateParts = dateText.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard dateParts.count == 3, (1...12).contains(dateParts[1]),
+              let day = Calendar(identifier: .gregorian).date(from: DateComponents(year: dateParts[0], month: dateParts[1], day: dateParts[2]))
+        else { return raw.isEmpty ? nil : raw }
+
+        let weekdays = ["sön", "mån", "tis", "ons", "tors", "fre", "lör"]
+        let months = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+        let weekday = weekdays[Calendar(identifier: .gregorian).component(.weekday, from: day) - 1]
+        var text = "\(weekday) \(dateParts[2]) \(months[dateParts[1] - 1])"
+
+        let timeParts = timeText.split(separator: ":").map(String.init)
+        if timeParts.count >= 2 { text += " \(timeParts[0]).\(timeParts[1].prefix(2))" }
+        return text
     }
 
     private nonisolated static func compactPeriodLabel(_ value: String?) -> String? {
@@ -1744,6 +1761,7 @@ private struct CourseOverviewData: Identifiable {
     let occupancyPercent: Int
     let revenue: Double
     let unpaid: Int
+    let overdue: Int
     let paid: Int
     let participants: [CourseParticipantData]
     let status: CourseOverviewStatus
