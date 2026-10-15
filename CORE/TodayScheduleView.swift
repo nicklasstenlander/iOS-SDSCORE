@@ -247,7 +247,35 @@ struct ScheduleEventCard: View {
     let mode: TodayScheduleView.Mode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(timeParts.start)
+                    .font(SDSType.agrandir(15, weight: .bold))
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                if !timeParts.end.isEmpty {
+                    Text(timeParts.end)
+                        .font(SDSType.agrandir(12))
+                        .foregroundColor(.sdsSecondaryText)
+                }
+            }
+            .frame(width: 50, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(event.name)
+                    .font(SDSType.agrandir(16, weight: .bold))
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .lineLimit(1)
+
+                if !teacherHallLine.isEmpty {
+                    Text(teacherHallLine)
+                        .font(SDSType.agrandir(13))
+                        .foregroundColor(.sdsSecondaryText)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
             if mode == .admin && isOngoing {
                 SDSBadge(
                     text: "Pågår nu",
@@ -257,39 +285,34 @@ struct ScheduleEventCard: View {
             } else if mode == .admin && isNext {
                 SDSBadge(text: "Nästa", color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
             }
-
-            Text(event.name)
-                .font(SDSType.agrandir(16, weight: .bold))
-                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Label(event.time, systemImage: "clock")
-                    .font(SDSType.agrandir(14))
-                    .foregroundColor(.sdsSecondaryText)
-
-                if !event.instructors.isEmpty {
-                    Label(event.instructors, systemImage: "person")
-                        .font(SDSType.agrandir(14))
-                        .foregroundColor(.sdsSecondaryText)
-                }
-
-                Label(placeDisplay, systemImage: "mappin")
-                    .font(SDSType.agrandir(14))
-                    .foregroundColor(.sdsSecondaryText)
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 14)
                 .stroke(cardBorder, lineWidth: 1)
         )
     }
 
+    // Splits "16:30–17:45" (EN DASH) into start/end; falls back to the raw string if unparseable
+    private var timeParts: (start: String, end: String) {
+        let comps = event.time.components(separatedBy: "\u{2013}")
+        guard comps.count == 2 else { return (event.time, "") }
+        return (comps[0].trimmingCharacters(in: .whitespaces), comps[1].trimmingCharacters(in: .whitespaces))
+    }
+
     private var placeDisplay: String {
         event.place.isEmpty ? "Övriga" : event.place
+    }
+
+    // "Matilda · Light Box" — omits the teacher segment when missing, never leaves a dangling separator
+    private var teacherHallLine: String {
+        var parts: [String] = []
+        if !event.instructors.isEmpty { parts.append(event.instructors) }
+        parts.append(placeDisplay)
+        return parts.joined(separator: " · ")
     }
 
     private var cardBackground: Color {
@@ -308,4 +331,24 @@ struct ScheduleEventCard: View {
 
 #Preview {
     TodayScheduleView()
+}
+
+#Preview("Passkort") {
+    let mockEvents: [ScheduleEvent] = [
+        ScheduleEvent(eventId: "1", eventCwId: "1", name: "Jazz & Balett 55+", time: "16:30\u{2013}17:15", dayStr: "2026-10-15", instructors: "Matilda", place: "Light Box", showing: true),
+        ScheduleEvent(eventId: "2", eventCwId: "2", name: "Barndans 3-4", time: "16:30\u{2013}17:00", dayStr: "2026-10-15", instructors: "Elin", place: "Black Box", showing: true),
+        ScheduleEvent(eventId: "3", eventCwId: "3", name: "Hiphop Teen", time: "17:15\u{2013}18:00", dayStr: "2026-10-15", instructors: "", place: "Light Box", showing: true)
+    ]
+    ScrollView {
+        VStack(spacing: 12) {
+            ForEach(mockEvents) { event in
+                ScheduleEventCard(event: event, isOngoing: event.eventId == "1" || event.eventId == "2", isNext: false, mode: .admin)
+            }
+            ForEach(mockEvents) { event in
+                ScheduleEventCard(event: event, isOngoing: false, isNext: event.eventId == "3", mode: .public)
+            }
+        }
+        .padding(20)
+    }
+    .background(Color.sdsPageBackground.ignoresSafeArea())
 }
