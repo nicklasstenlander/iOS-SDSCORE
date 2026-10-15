@@ -586,9 +586,20 @@ extension Event {
         return "Från \(min) år"
     }
 
+    private static let priceFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "sv_SE")
+        formatter.groupingSeparator = "\u{00A0}" // icke-brytande mellanslag
+        formatter.groupingSize = 3
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
+
     var priceFormatted: String? {
         guard let price = pricing?.basePriceInclVat else { return nil }
-        return "\(Int(price)) \(pricing?.currency ?? "SEK")"
+        let amount = Self.priceFormatter.string(from: NSNumber(value: Int(price))) ?? "\(Int(price))"
+        return "\(amount) kr"
     }
 
     // (veckodag 1=mån...7=sön, starttid "HH:mm:ss") — saknad info sorteras sist
