@@ -551,7 +551,8 @@ extension Booking {
         guard dateParts.count == 3 else { return 0 }
 
         var components = DateComponents(year: dateParts[0], month: dateParts[1], day: dateParts[2], hour: 23, minute: 59, second: 59)
-        if rawDue.count >= 16 {
+        let hasExplicitTime = rawDue.count >= 16
+        if hasExplicitTime {
             let timeParts = rawDue.dropFirst(11).prefix(8).split(separator: ":").compactMap { Int($0) }
             if timeParts.count >= 2 {
                 components.hour = timeParts[0]
@@ -562,10 +563,19 @@ extension Booking {
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Europe/Stockholm") ?? .current
-        guard let dueDate = calendar.date(from: components) else { return 0 }
+        guard let dueDate = calendar.date(from: components), dueDate < Date() else { return 0 }
 
-        let elapsed = Date().timeIntervalSince(dueDate)
-        return elapsed > 0 ? max(1, Int(elapsed / 86_400)) : 0
+        if hasExplicitTime {
+            // Exakt tid angiven — räkna faktisk förfluten tid
+            let elapsed = Date().timeIntervalSince(dueDate)
+            return max(1, Int(elapsed / 86_400))
+        }
+
+        // Bara datum angivet — hela förfallodagen gäller, så det är antal hela kalenderdagar
+        // sedan förfallodagen, inte avrundad förfluten tid (som skulle ge "7 dagar sedan" -> 6).
+        let dueDay = calendar.startOfDay(for: dueDate)
+        let today = calendar.startOfDay(for: Date())
+        return max(0, calendar.dateComponents([.day], from: dueDay, to: today).day ?? 0)
     }
 
     var formattedCreatedDate: String {

@@ -903,6 +903,10 @@ private extension OversiktView {
             .joined(separator: " · ")
     }
 
+    // Hoistade till typade konstanter: en array-literal direkt i uttrycket nedan fick typkontrollen att ta för lång tid.
+    private static let weekdayAbbreviations: [String] = ["sön", "mån", "tis", "ons", "tors", "fre", "lör"]
+    private static let monthAbbreviations: [String] = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+
     /// "2026-08-31" + "17:15:00" → "mån 31 aug 17.15". Faller tillbaka på råtexten om datumet inte går att tolka.
     private nonisolated static func formatStart(date: String?, time: String?) -> String? {
         let dateText = date?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -914,10 +918,8 @@ private extension OversiktView {
               let day = Calendar(identifier: .gregorian).date(from: DateComponents(year: dateParts[0], month: dateParts[1], day: dateParts[2]))
         else { return raw.isEmpty ? nil : raw }
 
-        let weekdays = ["sön", "mån", "tis", "ons", "tors", "fre", "lör"]
-        let months = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
-        let weekday = weekdays[Calendar(identifier: .gregorian).component(.weekday, from: day) - 1]
-        var text = "\(weekday) \(dateParts[2]) \(months[dateParts[1] - 1])"
+        let weekday = Self.weekdayAbbreviations[Calendar(identifier: .gregorian).component(.weekday, from: day) - 1]
+        var text = "\(weekday) \(dateParts[2]) \(Self.monthAbbreviations[dateParts[1] - 1])"
 
         let timeParts = timeText.split(separator: ":").map(String.init)
         if timeParts.count >= 2 { text += " \(timeParts[0]).\(timeParts[1].prefix(2))" }
