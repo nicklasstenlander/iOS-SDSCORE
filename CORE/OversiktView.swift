@@ -536,7 +536,7 @@ struct OversiktView: View {
     }
 
     private func revenueText(_ value: Double) -> String {
-        value > 0 ? "\(Int(value / 1000)) tkr" : "—"
+        value > 0 ? "\(formattedCurrency(value)) kr" : "—"
     }
 
     private var overviewCards: [OverviewCard] {
@@ -1844,7 +1844,7 @@ private extension GoalMetric {
     func formatted(_ value: Double) -> String {
         switch self {
         case .revenue:
-            return "\(Int(value / 1000)) tkr"
+            return "\(Int(value.rounded()).formatted(.number.locale(Locale(identifier: "sv_SE")))) kr"
         case .occupancy:
             return "\(Int(value.rounded()))%"
         default:

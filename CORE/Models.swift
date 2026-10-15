@@ -95,7 +95,7 @@ struct Booking: Codable, Identifiable {
 
     var formattedPrice: String {
         guard let price = payment?.priceAgreed else { return "–" }
-        return "\(Int(price)) \(payment?.currency ?? "SEK")"
+        return "\(Int(price)) kr"
     }
 }
 

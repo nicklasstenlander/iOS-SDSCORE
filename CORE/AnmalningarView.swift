@@ -538,11 +538,11 @@ extension Booking {
     var paymentBadgeText: String {
         if isPaid {
             let amount = payment?.amountPaid ?? payment?.priceAgreed ?? 0
-            return "Betald · \(Int(amount)) \(payment?.currency ?? "SEK")"
+            return "Betald · \(Int(amount)) kr"
         }
 
         if isPartiallyPaid {
-            return "Delbetald · \(Int(payment?.amountPaid ?? 0)) \(payment?.currency ?? "SEK")"
+            return "Delbetald · \(Int(payment?.amountPaid ?? 0)) kr"
         }
 
         let overdue = daysOverdue
