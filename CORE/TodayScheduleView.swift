@@ -93,9 +93,15 @@ struct TodayScheduleView: View {
 
             Spacer()
 
-            Text(formattedHeaderDate)
-                .font(SDSType.agrandir(18, weight: .bold))
-                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+            HStack(spacing: 8) {
+                Text(formattedHeaderDate)
+                    .font(SDSType.agrandir(18, weight: .bold))
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+
+                if !isToday {
+                    todayButton
+                }
+            }
 
             Spacer()
 
@@ -118,6 +124,22 @@ struct TodayScheduleView: View {
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.sdsBorder, lineWidth: 1))
         }
+    }
+
+    // Jämför med samma navigateTo som chevronerna använder, så isAutoTracking-beteendet vid midnatt förblir oförändrat
+    private var todayButton: some View {
+        Button {
+            service.navigateTo(date: Date())
+        } label: {
+            Text("Idag")
+                .font(SDSType.agrandir(13, weight: .bold))
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsLightGreenSurface)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var formattedHeaderDate: String {
