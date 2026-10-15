@@ -300,9 +300,9 @@ private struct CatalogCourseRow: View {
                 if mode == .admin {
                     if let accepted = event.statistics?.accepted,
                        let max = event.requirements?.maxParticipants {
-                        Text("\(accepted)/\(max)")
+                        Text(capacityText(accepted: accepted, max: max))
                             .font(SDSType.agrandir(12))
-                            .foregroundColor(accepted >= max ? .sdsPink : .sdsSecondaryText)
+                            .foregroundColor(accepted > max ? .sdsPink : .sdsSecondaryText)
                     } else if let accepted = event.statistics?.accepted {
                         Text("\(accepted) anm.")
                             .font(SDSType.agrandir(12))
@@ -313,6 +313,13 @@ private struct CatalogCourseRow: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+// Förklarar antalet istället för att bara visa en rosa siffra: "Överbokad +N", "Fullt" eller "accepterade/max"
+private func capacityText(accepted: Int, max: Int) -> String {
+    if accepted > max { return "Överbokad +\(accepted - max)" }
+    if accepted == max { return "Fullt" }
+    return "\(accepted)/\(max)"
 }
 
 private struct CatalogAgePill: View {
