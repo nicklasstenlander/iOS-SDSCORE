@@ -72,8 +72,22 @@ struct CourseCatalogView: View {
     private var groupedEvents: [(category: String, events: [Event])] {
         let grouped = Dictionary(grouping: filteredEvents) { $0.categoryName }
         return grouped
-            .sorted { $0.key < $1.key }
+            .sorted {
+                let rank0 = sectionRank(for: $0.key)
+                let rank1 = sectionRank(for: $1.key)
+                return rank0 != rank1 ? rank0 < rank1 : $0.key < $1.key
+            }
             .map { (category: $0.key, events: $0.value.sorted(by: eventSortedBeforeInSection)) }
+    }
+
+    // Ordnar sektioner efter målgrupp: barn, unga, (okända kategorier som t.ex. dansstilar), vuxna, 60+ sist
+    private func sectionRank(for category: String) -> Int {
+        let lower = category.lowercased()
+        if lower.contains("barn") || lower.contains("kids") { return 0 }
+        if lower.contains("ung") || lower.contains("junior") || lower.contains("tonår") || lower.contains("teen") { return 1 }
+        if lower.contains("vuxen") || lower.contains("vuxna") { return 3 }
+        if lower.contains("60+") { return 4 }
+        return 2
     }
 
     // Samma kursnamn inom en sektion sorteras efter veckodag + starttid, så "Jazz & Balett 55+" tis/tors inte blandas slumpmässigt
