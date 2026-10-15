@@ -145,29 +145,51 @@ struct CourseCatalogView: View {
         } else if groupedEvents.isEmpty {
             catalogEmptyState(icon: "magnifyingglass", text: "Inga kurser matchar sökningen.")
         } else {
-            List {
-                ForEach(groupedEvents, id: \.category) { group in
-                    Section {
-                        ForEach(group.events) { event in
-                            Button {
-                                selectedEvent = event
-                            } label: {
-                                CatalogCourseRow(event: event, mode: mode)
+            // ScrollView + LazyVStack istället för List, eftersom insetGrouped-headers inte går att pinna;
+            // kortutseendet per sektion (en sammanhängande rundad yta) återskapas manuellt.
+            ScrollView {
+                LazyVStack(spacing: 20, pinnedViews: [.sectionHeaders]) {
+                    ForEach(groupedEvents, id: \.category) { group in
+                        Section {
+                            VStack(spacing: 0) {
+                                ForEach(Array(group.events.enumerated()), id: \.element.id) { index, event in
+                                    Button {
+                                        selectedEvent = event
+                                    } label: {
+                                        CatalogCourseRow(event: event, mode: mode)
+                                            .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if index < group.events.count - 1 {
+                                        Divider().padding(.leading, 16)
+                                    }
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .listRowBackground(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsCard)
+                            .padding(.vertical, 4)
+                            .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsCard)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .padding(.horizontal, 16)
+                        } header: {
+                            sectionHeader(group.category)
                         }
-                    } header: {
-                        Text(group.category)
-                            .font(SDSType.agrandir(12, weight: .bold))
-                            .foregroundColor(.sdsSecondaryText)
-                            .textCase(.uppercase)
                     }
                 }
+                .padding(.top, 4)
+                .padding(.bottom, 24)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
         }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(SDSType.agrandir(14, weight: .semibold))
+            .foregroundColor(.sdsSecondaryText)
+            .textCase(.uppercase)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.sdsPageBackground)
     }
 
     private func catalogEmptyState(icon: String, text: String) -> some View {
