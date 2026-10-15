@@ -1,6 +1,6 @@
 import Foundation
 
-struct ScheduleEvent: Codable, Identifiable {
+struct ScheduleEvent: Codable, Identifiable, Equatable {
     let eventId: String
     let eventCwId: String
     let name: String

@@ -20,6 +20,7 @@ final class ScheduleService: ObservableObject {
     @Published var ongoingEvent: ScheduleEvent?
     @Published var ongoingEvents: [ScheduleEvent] = []
     @Published var nextEvent: ScheduleEvent?
+    @Published var pastEventIDs: Set<String> = []
 
     private var fetchPollTask: Task<Void, Never>?
     private var localTimerTask: Task<Void, Never>?
@@ -117,6 +118,8 @@ final class ScheduleService: ObservableObject {
             .filter { $0.1 > now }
             .min(by: { $0.1 < $1.1 })
             .map { $0.0 }
+
+        pastEventIDs = Set(timed.filter { $0.2 <= now }.map { $0.0.id })
     }
 
     // Returns (event, startDate, endDate), or nil and logs if the time string is malformed

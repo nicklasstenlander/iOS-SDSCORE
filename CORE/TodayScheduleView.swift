@@ -10,6 +10,7 @@ struct TodayScheduleView: View {
     @StateObject private var service = ScheduleService()
     @State private var isShowingDatePicker = false
     @State private var pickerDate = Date()
+    @State private var hasScrolledForCurrentDate = false
 
     init(mode: Mode = .admin) {
         self.mode = mode
@@ -25,25 +26,33 @@ struct TodayScheduleView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    dayNavigator
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 14)
-
-                    if let error = service.errorMessage, !service.events.isEmpty {
-                        errorBanner(error)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        dayNavigator
                             .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
-                    }
+                            .padding(.vertical, 14)
 
-                    if service.isLoading && service.events.isEmpty {
-                        loadingPlaceholder
-                    } else if service.events.isEmpty {
-                        emptyPlaceholder
-                    } else {
-                        eventCards
+                        if let error = service.errorMessage, !service.events.isEmpty {
+                            errorBanner(error)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 12)
+                        }
+
+                        if service.isLoading && service.events.isEmpty {
+                            loadingPlaceholder
+                        } else if service.events.isEmpty {
+                            emptyPlaceholder
+                        } else {
+                            eventCards
+                        }
                     }
+                }
+                .onChange(of: service.displayedDate) { _, _ in
+                    hasScrolledForCurrentDate = false
+                }
+                .onChange(of: service.events) { _, _ in
+                    scrollToNowIfNeeded(proxy: proxy)
                 }
             }
             .background(Color.sdsPageBackground.ignoresSafeArea())
@@ -172,12 +181,27 @@ struct TodayScheduleView: View {
                     event: event,
                     isOngoing: service.ongoingEvents.contains { $0.id == event.id },
                     isNext: service.ongoingEvents.isEmpty && service.nextEvent?.id == event.id,
-                    mode: mode
+                    mode: mode,
+                    isPast: isToday && service.pastEventIDs.contains(event.id)
                 )
+                .id(event.id)
             }
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 28)
+    }
+
+    private var isToday: Bool {
+        ScheduleService.stockholmCalendar.isDate(service.displayedDate, inSameDayAs: Date())
+    }
+
+    // Scrolls to the first non-past pass once per viewing of today, so the user's own scrolling isn't overridden
+    private func scrollToNowIfNeeded(proxy: ScrollViewProxy) {
+        guard isToday, !hasScrolledForCurrentDate, !service.events.isEmpty else { return }
+        hasScrolledForCurrentDate = true
+        if let target = service.events.first(where: { !service.pastEventIDs.contains($0.id) })?.id {
+            proxy.scrollTo(target, anchor: .top)
+        }
     }
 
     // MARK: - Empty / Loading States
@@ -245,6 +269,7 @@ struct ScheduleEventCard: View {
     let isOngoing: Bool
     let isNext: Bool
     let mode: TodayScheduleView.Mode
+    var isPast: Bool = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -294,6 +319,7 @@ struct ScheduleEventCard: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(cardBorder, lineWidth: 1)
         )
+        .opacity(isPast ? 0.55 : 1)
     }
 
     // Splits "16:30–17:45" (EN DASH) into start/end; falls back to the raw string if unparseable
@@ -335,6 +361,7 @@ struct ScheduleEventCard: View {
 
 #Preview("Passkort") {
     let mockEvents: [ScheduleEvent] = [
+        ScheduleEvent(eventId: "0", eventCwId: "0", name: "Förskoledans 1-2", time: "15:30\u{2013}16:00", dayStr: "2026-10-15", instructors: "Elin", place: "Black Box", showing: true),
         ScheduleEvent(eventId: "1", eventCwId: "1", name: "Jazz & Balett 55+", time: "16:30\u{2013}17:15", dayStr: "2026-10-15", instructors: "Matilda", place: "Light Box", showing: true),
         ScheduleEvent(eventId: "2", eventCwId: "2", name: "Barndans 3-4", time: "16:30\u{2013}17:00", dayStr: "2026-10-15", instructors: "Elin", place: "Black Box", showing: true),
         ScheduleEvent(eventId: "3", eventCwId: "3", name: "Hiphop Teen", time: "17:15\u{2013}18:00", dayStr: "2026-10-15", instructors: "", place: "Light Box", showing: true)
@@ -342,10 +369,10 @@ struct ScheduleEventCard: View {
     ScrollView {
         VStack(spacing: 12) {
             ForEach(mockEvents) { event in
-                ScheduleEventCard(event: event, isOngoing: event.eventId == "1" || event.eventId == "2", isNext: false, mode: .admin)
+                ScheduleEventCard(event: event, isOngoing: event.eventId == "1" || event.eventId == "2", isNext: false, mode: .admin, isPast: event.eventId == "0")
             }
             ForEach(mockEvents) { event in
-                ScheduleEventCard(event: event, isOngoing: false, isNext: event.eventId == "3", mode: .public)
+                ScheduleEventCard(event: event, isOngoing: false, isNext: event.eventId == "3", mode: .public, isPast: event.eventId == "0")
             }
         }
         .padding(20)
