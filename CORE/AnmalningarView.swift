@@ -30,6 +30,7 @@ struct AnmalningarView: View {
     private var paidCount: Int { statisticalPeriodBookings.filter(\.isPaid).count }
     private var unpaidCount: Int { statisticalPeriodBookings.filter(\.isUnpaid).count }
     private var partialCount: Int { statisticalPeriodBookings.filter(\.isPartiallyPaid).count }
+    private var overdueCount: Int { statisticalPeriodBookings.filter { $0.daysOverdue > 0 }.count }
 
     private var eventLookup: [String: Event] { cogWork.eventLookup }
 
@@ -40,7 +41,7 @@ struct AnmalningarView: View {
                     SDSPeriodPicker(periods: periods, selectedPeriod: $cogWork.selectedPeriod)
 
                     filterScroller(PaymentFilter.allCases) { filter in
-                        SDSPill(title: filter.title(paid: paidCount, unpaid: unpaidCount, partial: partialCount), isSelected: paymentFilter == filter) {
+                        SDSPill(title: filter.title(paid: paidCount, unpaid: unpaidCount, overdue: overdueCount, partial: partialCount), isSelected: paymentFilter == filter) {
                             paymentFilter = filter
                         }
                     }
@@ -126,20 +127,27 @@ struct AnmalningarView: View {
                 .font(SDSType.agrandir(14, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
-            HStack(spacing: 14) {
-                SummaryMetric(value: paidCount, label: "betalda", color: .sdsDarkGreen)
-                SummaryMetric(value: unpaidCount, label: "obetalda", color: .sdsPink)
-                if partialCount > 0 {
-                    SummaryMetric(value: partialCount, label: "delbetalda", color: .sdsWarningText)
-                }
-            }
-
             if let updated = cogWork.lastUpdated {
                 Text("Uppdaterad \(updated, format: .dateTime.hour().minute())")
                     .font(SDSType.agrandir(11))
                     .foregroundColor(.sdsTertiaryText)
             }
         }
+    }
+
+    // filteredBookings är redan sorterad nyast-först, så lika dagar hamnar i sammanhängande block —
+    // det räcker att gruppera grannvis istället för Dictionary(grouping:), som inte bevarar ordningen.
+    private var groupedBookings: [(key: String, bookings: [Booking])] {
+        var groups: [(key: String, bookings: [Booking])] = []
+        for booking in filteredBookings {
+            let key = booking.formattedCreatedDate
+            if groups.indices.last.map({ groups[$0].key }) == key {
+                groups[groups.count - 1].bookings.append(booking)
+            } else {
+                groups.append((key: key, bookings: [booking]))
+            }
+        }
+        return groups
     }
 
     private var summaryTitle: String {
@@ -186,27 +194,44 @@ struct AnmalningarView: View {
                 .foregroundColor(.sdsMutedText)
                 .frame(maxWidth: .infinity, minHeight: 220)
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(filteredBookings) { booking in
-                    BookingRow(
-                        booking: booking,
-                        isNewStudent: isNewStudent(booking),
-                        isTicketPurchase: isTicketPurchase(booking),
-                        scheduleText: scheduleText(for: booking)
-                    )
-                        .contentShape(Rectangle())
-                        .onTapGesture { selectedBooking = booking }
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedBookings, id: \.key) { group in
+                    Section {
+                        ForEach(group.bookings) { booking in
+                            BookingRow(
+                                booking: booking,
+                                isNewStudent: isNewStudent(booking),
+                                isTicketPurchase: isTicketPurchase(booking),
+                                scheduleText: scheduleText(for: booking),
+                                showsDate: false
+                            )
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedBooking = booking }
 
-                    if booking.id != filteredBookings.last?.id {
-                        Rectangle()
-                            .fill(Color.sdsLightGreen)
-                            .opacity(0.55)
-                            .frame(height: 1)
-                            .padding(.leading, 16)
+                            if booking.id != group.bookings.last?.id {
+                                Rectangle()
+                                    .fill(Color.sdsLightGreen)
+                                    .opacity(0.55)
+                                    .frame(height: 1)
+                                    .padding(.leading, 16)
+                            }
+                        }
+                    } header: {
+                        dateSectionHeader(group.key)
                     }
                 }
             }
         }
+    }
+
+    private func dateSectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(SDSType.agrandir(12, weight: .bold))
+            .foregroundColor(.sdsSecondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.sdsElevatedSurface)
     }
 
     private func filterScroller<Data: RandomAccessCollection, Content: View>(
@@ -241,34 +266,19 @@ struct AnmalningarView: View {
 
 }
 
-private struct SummaryMetric: View {
-    let value: Int
-    let label: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Text("\(value)")
-                .font(SDSType.agrandir(12, weight: .bold))
-                .foregroundColor(color)
-            Text(label)
-                .font(SDSType.agrandir(12))
-                .foregroundColor(.sdsSecondaryText)
-        }
-    }
-}
-
 private enum PaymentFilter: CaseIterable, Hashable {
     case all
     case paid
     case unpaid
+    case overdue
     case partial
 
-    func title(paid: Int, unpaid: Int, partial: Int) -> String {
+    func title(paid: Int, unpaid: Int, overdue: Int, partial: Int) -> String {
         switch self {
         case .all: "Alla"
         case .paid: "Betalda (\(paid))"
         case .unpaid: "Obetalda (\(unpaid))"
+        case .overdue: "Förfallna (\(overdue))"
         case .partial: "Delbetalda (\(partial))"
         }
     }
@@ -278,6 +288,7 @@ private enum PaymentFilter: CaseIterable, Hashable {
         case .all: true
         case .paid: booking.isPaid
         case .unpaid: booking.isUnpaid
+        case .overdue: booking.daysOverdue > 0
         case .partial: booking.isPartiallyPaid
         }
     }
@@ -288,12 +299,15 @@ struct BookingRow: View {
     let isNewStudent: Bool
     let isTicketPurchase: Bool
     let scheduleText: String?
+    var showsDate: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            Text(booking.formattedCreatedDate)
-                .font(SDSType.agrandir(12))
-                .foregroundColor(.sdsMutedText)
+            if showsDate {
+                Text(booking.formattedCreatedDate)
+                    .font(SDSType.agrandir(12))
+                    .foregroundColor(.sdsMutedText)
+            }
 
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
@@ -332,14 +346,18 @@ struct BookingRow: View {
             }
 
             SDSBadge(
-                text: booking.paymentBadgeText,
+                // Priset står redan uppe till höger – upprepa det inte i badgen för betalda.
+                text: booking.isPaid ? "Betald" : booking.paymentBadgeText,
                 color: booking.paymentBadgeColor,
                 textColor: booking.paymentTextColor
             )
 
-            Text(booking.status?.displayName ?? "—")
-                .font(SDSType.agrandir(12))
-                .foregroundColor(.sdsSecondaryText)
+            // "Accepterad" är normalläget – visa status bara när den avviker.
+            if let statusName = booking.status?.displayName, statusName != "Accepterad" {
+                Text(statusName)
+                    .font(SDSType.agrandir(12))
+                    .foregroundColor(.sdsSecondaryText)
+            }
         }
         .padding(16)
         .background(Color.sdsElevatedSurface)
@@ -520,11 +538,16 @@ extension Booking {
     var paymentBadgeText: String {
         if isPaid {
             let amount = payment?.amountPaid ?? payment?.priceAgreed ?? 0
-            return "Betald · \(Int(amount)) \(payment?.currency ?? "SEK")"
+            return "Betald · \(Int(amount)) kr"
         }
 
         if isPartiallyPaid {
-            return "Delbetald · \(Int(payment?.amountPaid ?? 0)) \(payment?.currency ?? "SEK")"
+            return "Delbetald · \(Int(payment?.amountPaid ?? 0)) kr"
+        }
+
+        let overdue = daysOverdue
+        if overdue > 0 {
+            return "Förfallen · \(overdue) \(overdue == 1 ? "dag" : "dagar")"
         }
 
         if let due = payment?.paymentDue, !due.isEmpty {
@@ -537,13 +560,57 @@ extension Booking {
     var paymentBadgeColor: Color {
         if isPaid { return .sdsLightGreen }
         if isPartiallyPaid { return .sdsAmberSurface }
+        if daysOverdue > 0 { return Self.overdueBadgeColor }
         return .sdsPinkSurface
     }
 
     var paymentTextColor: Color {
         if isPaid { return .sdsDarkGreen }
         if isPartiallyPaid { return .sdsWarningText }
+        if daysOverdue > 0 { return .white }
         return .sdsPink
+    }
+
+    /// Mörk rosa (#B4234F) – vit text på den ger ≈ 6,4:1 kontrast.
+    private static let overdueBadgeColor = Color(red: 180 / 255, green: 35 / 255, blue: 79 / 255)
+
+    /// Antal hela dagar sedan förfallodagen passerat (0 = ej förfallen / ej obetald).
+    /// Datum utan klockslag gäller hela förfallodagen. Samma regel som webbens daysOverdue.
+    nonisolated var daysOverdue: Int {
+        guard payment?.paid == false,
+              !((payment?.amountPaid ?? 0) > 0),
+              let rawDue = payment?.paymentDue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              rawDue.count >= 10 else { return 0 }
+
+        let dateParts = rawDue.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard dateParts.count == 3 else { return 0 }
+
+        var components = DateComponents(year: dateParts[0], month: dateParts[1], day: dateParts[2], hour: 23, minute: 59, second: 59)
+        let hasExplicitTime = rawDue.count >= 16
+        if hasExplicitTime {
+            let timeParts = rawDue.dropFirst(11).prefix(8).split(separator: ":").compactMap { Int($0) }
+            if timeParts.count >= 2 {
+                components.hour = timeParts[0]
+                components.minute = timeParts[1]
+                components.second = timeParts.count > 2 ? timeParts[2] : 0
+            }
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Stockholm") ?? .current
+        guard let dueDate = calendar.date(from: components), dueDate < Date() else { return 0 }
+
+        if hasExplicitTime {
+            // Exakt tid angiven — räkna faktisk förfluten tid
+            let elapsed = Date().timeIntervalSince(dueDate)
+            return max(1, Int(elapsed / 86_400))
+        }
+
+        // Bara datum angivet — hela förfallodagen gäller, så det är antal hela kalenderdagar
+        // sedan förfallodagen, inte avrundad förfluten tid (som skulle ge "7 dagar sedan" -> 6).
+        let dueDay = calendar.startOfDay(for: dueDate)
+        let today = calendar.startOfDay(for: Date())
+        return max(0, calendar.dateComponents([.day], from: dueDay, to: today).day ?? 0)
     }
 
     var formattedCreatedDate: String {

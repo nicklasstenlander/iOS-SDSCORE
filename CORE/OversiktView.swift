@@ -536,7 +536,7 @@ struct OversiktView: View {
     }
 
     private func revenueText(_ value: Double) -> String {
-        value > 0 ? "\(Int(value / 1000)) tkr" : "—"
+        value > 0 ? "\(formattedCurrency(value)) kr" : "—"
     }
 
     private var overviewCards: [OverviewCard] {
@@ -757,6 +757,7 @@ struct OversiktView: View {
         switch courseSort {
         case .attention:
             return rows.sorted {
+                if $0.overdue != $1.overdue { return $0.overdue > $1.overdue }
                 if $0.unpaid == $1.unpaid { return $0.registered > $1.registered }
                 return $0.unpaid > $1.unpaid
             }
@@ -827,6 +828,7 @@ private extension OversiktView {
         let unpaid = statistical.filter { $0.payment?.paid == false }.count
         let revenue = statistical.filter(\.isAcceptedForOverview).compactMap { $0.payment?.priceAgreed }.reduce(0, +)
         let paid = statistical.filter { $0.payment?.paid == true }.count
+        let overdue = statistical.filter { $0.daysOverdue > 0 }.count
         let maxParticipants = event?.requirements?.maxParticipants
         let pct = maxParticipants.map { capacity in
             capacity > 0 ? Int((Double(accepted) / Double(capacity) * 100).rounded()) : 0
@@ -843,7 +845,8 @@ private extension OversiktView {
             }
 
         let status: CourseOverviewStatus
-        if unpaid > 0 { status = .attention }
+        // "Följ upp" bara när något faktiskt har förfallit – annars hamnar nästan alla kurser där.
+        if overdue > 0 { status = .attention }
         else if statistical.isEmpty { status = .neutral }
         else if let maxParticipants, maxParticipants > 0 {
             let ratio = Double(accepted) / Double(maxParticipants)
@@ -863,6 +866,7 @@ private extension OversiktView {
             occupancyPercent: pct,
             revenue: revenue,
             unpaid: unpaid,
+            overdue: overdue,
             paid: paid,
             participants: participants,
             status: status
@@ -885,26 +889,41 @@ private extension OversiktView {
         if let event {
             let blockLabel = event.grouping?.eventBlock?.name.map(Periods.blockNameToFullLabel)
             let periodLabel = compactPeriodLabel(blockLabel)
-            let startParts = [event.schedule?.start?.date, event.schedule?.start?.time]
-                .compactMap { value -> String? in
-                    guard let value, !value.isEmpty else { return nil }
-                    return value
-                }
-            return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+            let start = formatStart(date: event.schedule?.start?.date, time: event.schedule?.start?.time)
+            return [periodLabel, start]
                 .compactMap { $0 }
                 .joined(separator: " · ")
         }
 
         guard let fallbackBooking else { return "" }
         let periodLabel = compactPeriodLabel(fallbackBooking.overviewPeriodLabel)
-        let startParts = [fallbackBooking.event?.startDate, fallbackBooking.event?.startTime]
-            .compactMap { value -> String? in
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            }
-        return ([periodLabel] + (startParts.isEmpty ? [] : [startParts.joined(separator: " ")]))
+        let start = formatStart(date: fallbackBooking.event?.startDate, time: fallbackBooking.event?.startTime)
+        return [periodLabel, start]
             .compactMap { $0 }
             .joined(separator: " · ")
+    }
+
+    // Hoistade till typade konstanter: en array-literal direkt i uttrycket nedan fick typkontrollen att ta för lång tid.
+    private static let weekdayAbbreviations: [String] = ["sön", "mån", "tis", "ons", "tors", "fre", "lör"]
+    private static let monthAbbreviations: [String] = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"]
+
+    /// "2026-08-31" + "17:15:00" → "mån 31 aug 17.15". Faller tillbaka på råtexten om datumet inte går att tolka.
+    private nonisolated static func formatStart(date: String?, time: String?) -> String? {
+        let dateText = date?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let timeText = time?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let raw = [dateText, timeText].filter { !$0.isEmpty }.joined(separator: " ")
+
+        let dateParts = dateText.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard dateParts.count == 3, (1...12).contains(dateParts[1]),
+              let day = Calendar(identifier: .gregorian).date(from: DateComponents(year: dateParts[0], month: dateParts[1], day: dateParts[2]))
+        else { return raw.isEmpty ? nil : raw }
+
+        let weekday = Self.weekdayAbbreviations[Calendar(identifier: .gregorian).component(.weekday, from: day) - 1]
+        var text = "\(weekday) \(dateParts[2]) \(Self.monthAbbreviations[dateParts[1] - 1])"
+
+        let timeParts = timeText.split(separator: ":").map(String.init)
+        if timeParts.count >= 2 { text += " \(timeParts[0]).\(timeParts[1].prefix(2))" }
+        return text
     }
 
     private nonisolated static func compactPeriodLabel(_ value: String?) -> String? {
@@ -1491,20 +1510,19 @@ private struct CourseOverviewRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(row.name)
                             .font(SDSType.agrandir(15, weight: .bold))
                             .foregroundColor(.sdsPrimaryText)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
 
                         if !row.meta.isEmpty {
                             Text(row.meta)
                                 .font(SDSType.agrandir(12))
                                 .foregroundColor(.sdsSecondaryText)
-                                .lineLimit(2)
+                                .lineLimit(1)
                         }
                     }
 
@@ -1513,14 +1531,28 @@ private struct CourseOverviewRow: View {
                     SDSBadge(text: row.status.title, color: row.status.background, textColor: row.status.foreground)
                 }
 
-                LazyVGrid(columns: metricColumns, spacing: 8) {
-                    CourseMiniMetric(title: "Antagna/platser", value: row.acceptedCapacityText)
-                    CourseMiniMetric(title: "Beläggning", value: "\(row.occupancyPercent)%")
-                    CourseMiniMetric(title: "Intäkt", value: row.revenueText)
-                    CourseMiniMetric(title: "Obetalda", value: "\(row.unpaid)", tint: row.unpaid > 0 ? .sdsPink : .sdsDarkModeGreen)
+                HStack(spacing: 10) {
+                    Text(row.acceptedCapacityText)
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(.sdsPrimaryText)
+                        .lineLimit(1)
+
+                    CourseOccupancyBar(percent: row.occupancyPercent)
+                        .frame(width: 56, height: 6)
+
+                    Text("\(row.occupancyPercent)%")
+                        .font(SDSType.agrandir(11))
+                        .foregroundColor(.sdsSecondaryText)
+
+                    Spacer(minLength: 8)
+
+                    Text("Obetalda \(row.unpaid)")
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(row.unpaid > 0 ? .sdsPink : .sdsSecondaryText)
+                        .lineLimit(1)
                 }
             }
-            .padding(16)
+            .padding(14)
             .background(Color.sdsElevatedSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
@@ -1530,9 +1562,20 @@ private struct CourseOverviewRow: View {
         }
         .buttonStyle(.plain)
     }
+}
 
-    private var metricColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+private struct CourseOccupancyBar: View {
+    let percent: Int
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.sdsSubtleSurface)
+                Capsule()
+                    .fill(percent >= 100 ? Color.sdsPink : Color.sdsDarkModeGreen)
+                    .frame(width: geometry.size.width * CGFloat(min(max(percent, 0), 100)) / 100)
+            }
+        }
     }
 }
 
@@ -1580,31 +1623,6 @@ private struct CourseParticipantRow: View {
         participant.booking.participant?.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? participant.booking.participant?.name ?? "Okänd deltagare"
             : "Okänd deltagare"
-    }
-}
-
-private struct CourseMiniMetric: View {
-    let title: String
-    let value: String
-    var tint: Color = .sdsPrimaryText
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(SDSType.agrandir(10, weight: .bold))
-                .foregroundColor(.sdsSecondaryText)
-                .lineLimit(1)
-            Text(value)
-                .font(SDSType.agrandir(14, weight: .bold))
-                .foregroundColor(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .background(Color.sdsSubtleSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -1744,13 +1762,10 @@ private struct CourseOverviewData: Identifiable {
     let occupancyPercent: Int
     let revenue: Double
     let unpaid: Int
+    let overdue: Int
     let paid: Int
     let participants: [CourseParticipantData]
     let status: CourseOverviewStatus
-
-    var revenueText: String {
-        revenue > 0 ? "\(Int(revenue / 1000)) tkr" : "—"
-    }
 
     var acceptedCapacityText: String {
         guard let capacity, capacity > 0 else { return "\(accepted)/—" }
@@ -1829,7 +1844,7 @@ private extension GoalMetric {
     func formatted(_ value: Double) -> String {
         switch self {
         case .revenue:
-            return "\(Int(value / 1000)) tkr"
+            return "\(Int(value.rounded()).formatted(.number.locale(Locale(identifier: "sv_SE")))) kr"
         case .occupancy:
             return "\(Int(value.rounded()))%"
         default:
