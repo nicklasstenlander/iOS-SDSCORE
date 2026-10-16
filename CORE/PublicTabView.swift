@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct PublicTabView: View {
+    @EnvironmentObject private var rideau: RideauEventsService
     @State private var selectedTab = PublicTab.home
     @State private var selectedCourseID: Int?
+    @State private var selectedPerformanceSlug: String?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -21,6 +23,14 @@ struct PublicTabView: View {
                 onOpenCourseID: { eventID in
                     selectedCourseID = eventID
                     selectedTab = .courses
+                },
+                onShowPerformances: {
+                    selectedPerformanceSlug = nil
+                    selectedTab = .performances
+                },
+                onOpenPerformanceSlug: { slug in
+                    selectedPerformanceSlug = slug
+                    selectedTab = .performances
                 }
             )
             .tabItem { Label("Hem", systemImage: "house") }
@@ -32,27 +42,36 @@ struct PublicTabView: View {
             .tabItem { Label("Kurser", systemImage: "sparkles") }
             .tag(PublicTab.courses)
 
-            AboutView()
-                .tabItem { Label("Om oss", systemImage: "info.circle") }
-                .tag(PublicTab.about)
-
             TodayScheduleView(mode: .public)
                 .tabItem { Label("Schema", systemImage: "calendar") }
                 .tag(PublicTab.schedule)
+
+            if rideau.isVisible {
+                NavigationStack {
+                    PerformancesView(initialSelectedSlug: selectedPerformanceSlug)
+                }
+                .tabItem { Label("Föreställningar", systemImage: "ticket") }
+                .tag(PublicTab.performances)
+            }
 
             PublicMerView()
                 .tabItem { Label("Mer", systemImage: "ellipsis.circle") }
                 .tag(PublicTab.more)
         }
         .tint(.sdsTeal)
+        .onChange(of: rideau.isVisible) { _, visible in
+            if !visible && selectedTab == .performances {
+                selectedTab = .home
+            }
+        }
     }
 }
 
 private enum PublicTab: Hashable {
     case home
     case courses
-    case about
     case schedule
+    case performances
     case more
 }
 
@@ -135,6 +154,7 @@ struct PublicMerView: View {
         .environmentObject(CogWorkService())
         .environmentObject(SupabaseAuthService())
         .environmentObject(PushNotificationService.shared)
+        .environmentObject(RideauEventsService())
 }
 
 #Preview("PublicMerView") {

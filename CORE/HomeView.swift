@@ -1,8 +1,44 @@
 import SwiftUI
 import UIKit
 
+nonisolated enum HomeCardDestination: Equatable {
+    case courses
+    case schedule
+    case course(Int)
+    case performances
+    case performanceSlug(String)
+    case none
+
+    static func parse(_ raw: String?) -> HomeCardDestination {
+        guard let destination = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !destination.isEmpty else {
+            return .none
+        }
+
+        if destination == "kurser" {
+            return .courses
+        }
+        if destination == "schema" {
+            return .schedule
+        }
+        if destination == "forestallningar" {
+            return .performances
+        }
+        if destination.hasPrefix("course:") {
+            let idString = destination.replacingOccurrences(of: "course:", with: "")
+            return Int(idString).map { .course($0) } ?? .courses
+        }
+        if destination.hasPrefix("event:") {
+            let slug = destination.replacingOccurrences(of: "event:", with: "")
+            return slug.isEmpty ? .performances : .performanceSlug(slug)
+        }
+        return .none
+    }
+}
+
 struct HomeView: View {
     @EnvironmentObject private var cogWork: CogWorkService
+    @EnvironmentObject private var rideau: RideauEventsService
     @StateObject private var contentCards = ContentCardsService()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -11,6 +47,8 @@ struct HomeView: View {
     let onShowSchedule: () -> Void
     let onOpenCourse: (Event) -> Void
     let onOpenCourseID: (Int) -> Void
+    let onShowPerformances: () -> Void
+    let onOpenPerformanceSlug: (String) -> Void
     @State private var bookingURL: URL?
     @State private var showSafari = false
 
@@ -56,6 +94,9 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 28) {
                 heroSection
 
+                ticketTeaserCard
+                    .padding(.horizontal, 20)
+
                 if !contentCards.cards.isEmpty {
                     contentCardsSection
                         .padding(.horizontal, 20)
@@ -78,11 +119,61 @@ struct HomeView: View {
             if cogWork.events.isEmpty {
                 await cogWork.loadEvents()
             }
+            await rideau.loadIfNeeded()
         }
         .sheet(isPresented: $showSafari) {
             if let bookingURL {
                 SafariView(url: bookingURL).ignoresSafeArea()
             }
+        }
+    }
+
+    private var nextTicketEvent: RideauEvent? {
+        rideau.events
+            .filter { $0.salesState == .upcoming || $0.salesState == .open }
+            .sorted {
+                (RideauISO8601.parse($0.startsAt) ?? .distantFuture) < (RideauISO8601.parse($1.startsAt) ?? .distantFuture)
+            }
+            .first
+    }
+
+    @ViewBuilder
+    private var ticketTeaserCard: some View {
+        if let event = nextTicketEvent {
+            Button {
+                onShowPerformances()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "ticket.fill")
+                        .foregroundColor(.white)
+                    Text(ticketTeaserText(for: event))
+                        .font(SDSType.agrandir(15, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(Color.sdsTeal)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func ticketTeaserText(for event: RideauEvent) -> String {
+        switch event.salesState {
+        case .upcoming:
+            if let salesOpenAt = event.salesOpenAt, let text = RideauDateFormatting.displayText(for: salesOpenAt) {
+                return "\(event.title) – biljetter släpps \(text)"
+            }
+            return "\(event.title) – biljetterna släpps snart"
+        case .open:
+            return "Biljetterna till \(event.title) är släppta"
+        case .soldOut, .unknown:
+            return event.title
         }
     }
 
@@ -191,25 +282,21 @@ struct HomeView: View {
     }
 
     private func handleCardTap(_ card: ContentCard) {
-        guard let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !destination.isEmpty else {
+        switch HomeCardDestination.parse(card.appDestination) {
+        case .courses:
+            onShowAllCourses()
+        case .schedule:
+            onShowSchedule()
+        case .course(let id):
+            onOpenCourseID(id)
+        case .performances:
+            onShowPerformances()
+        case .performanceSlug(let slug):
+            onOpenPerformanceSlug(slug)
+        case .none:
             if let urlString = card.linkUrl, let url = URL(string: urlString) {
                 bookingURL = url
                 showSafari = true
-            }
-            return
-        }
-
-        if destination == "kurser" {
-            onShowAllCourses()
-        } else if destination == "schema" {
-            onShowSchedule()
-        } else if destination.hasPrefix("course:") {
-            let eventIdString = destination.replacingOccurrences(of: "course:", with: "")
-            if let eventId = Int(eventIdString) {
-                onOpenCourseID(eventId)
-            } else {
-                onShowAllCourses()
             }
         }
     }
@@ -536,7 +623,10 @@ fileprivate func buildCardRows(from slots: [CardLayoutSlot]) -> [CardRow] {
         onShowAllCourses: {},
         onShowSchedule: {},
         onOpenCourse: { _ in },
-        onOpenCourseID: { _ in }
+        onOpenCourseID: { _ in },
+        onShowPerformances: {},
+        onOpenPerformanceSlug: { _ in }
     )
     .environmentObject(CogWorkService())
+    .environmentObject(RideauEventsService())
 }

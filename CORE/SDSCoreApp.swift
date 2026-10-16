@@ -7,6 +7,7 @@ struct SDSCoreApp: App {
     @StateObject private var cogWork = CogWorkService()
     @StateObject private var goals = GoalsService()
     @StateObject private var push = PushNotificationService.shared
+    @StateObject private var rideau = RideauEventsService()
 
     init() {}
 
@@ -17,6 +18,7 @@ struct SDSCoreApp: App {
                 .environmentObject(cogWork)
                 .environmentObject(goals)
                 .environmentObject(push)
+                .environmentObject(rideau)
         }
     }
 }
@@ -25,6 +27,8 @@ struct RootView: View {
     @EnvironmentObject var auth: SupabaseAuthService
     @EnvironmentObject var cogWork: CogWorkService
     @EnvironmentObject var push: PushNotificationService
+    @EnvironmentObject var rideau: RideauEventsService
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -47,6 +51,7 @@ struct RootView: View {
             syncDebugCogWorkPasswordIfNeeded()
             // Icke-blockerande förhämtning av appdata parallellt med auth
             Task { await cogWork.loadAllDataIfNeeded() }
+            Task { await rideau.loadIfNeeded() }
         }
         .onChange(of: auth.isAuthenticated) { _, _ in
             syncDebugCogWorkPasswordIfNeeded()
@@ -55,6 +60,10 @@ struct RootView: View {
         .onChange(of: auth.profile) { _, profile in
             guard profile != nil else { return }
             Task { await PushNotificationService.shared.reRegisterIfNeeded() }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task { await rideau.loadIfNeeded() }
         }
     }
 

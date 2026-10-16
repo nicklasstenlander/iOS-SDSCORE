@@ -12,10 +12,21 @@
 		2B35B606300274F30072F400 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B35B605300274F30072F400 /* SafariView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		2B6C2FA3307A743F0058250F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 2B9182BA2FFA9018000E33CD /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2B9182C12FFA9018000E33CD;
+			remoteInfo = CORE;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		2B01D44E2FFAEEB10097CA0E /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		2B35B5F3300023640072F400 /* CourseCatalogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CourseCatalogView.swift; sourceTree = "<group>"; };
 		2B35B605300274F30072F400 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
+		2B6C2F9F307A743F0058250F /* RideauTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RideauTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B9182C22FFA9018000E33CD /* CORE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CORE.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B9182E32FFA94D6000E33CD /* CORE.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CORE.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -31,6 +42,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		2B6C2FA0307A743F0058250F /* RideauTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = RideauTests;
+			sourceTree = "<group>";
+		};
 		2B9182C42FFA9018000E33CD /* CORE */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -42,6 +58,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2B6C2F9C307A743F0058250F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2B9182BF2FFA9018000E33CD /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -56,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				2B9182C42FFA9018000E33CD /* CORE */,
+				2B6C2FA0307A743F0058250F /* RideauTests */,
 				2B9182C32FFA9018000E33CD /* Products */,
 				2B9182E32FFA94D6000E33CD /* CORE.entitlements */,
 				2B01D44E2FFAEEB10097CA0E /* Secrets.xcconfig */,
@@ -68,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				2B9182C22FFA9018000E33CD /* CORE.app */,
+				2B6C2F9F307A743F0058250F /* RideauTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -75,6 +100,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2B6C2F9E307A743F0058250F /* RideauTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2B6C2FA7307A743F0058250F /* Build configuration list for PBXNativeTarget "RideauTests" */;
+			buildPhases = (
+				2B6C2F9B307A743F0058250F /* Sources */,
+				2B6C2F9C307A743F0058250F /* Frameworks */,
+				2B6C2F9D307A743F0058250F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2B6C2FA4307A743F0058250F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2B6C2FA0307A743F0058250F /* RideauTests */,
+			);
+			name = RideauTests;
+			packageProductDependencies = (
+			);
+			productName = RideauTests;
+			productReference = 2B6C2F9F307A743F0058250F /* RideauTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		2B9182C12FFA9018000E33CD /* CORE */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2B9182CD2FFA9018000E33CD /* Build configuration list for PBXNativeTarget "CORE" */;
@@ -104,9 +152,13 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2660;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					2B6C2F9E307A743F0058250F = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 2B9182C12FFA9018000E33CD;
+					};
 					2B9182C12FFA9018000E33CD = {
 						CreatedOnToolsVersion = 26.6;
 						LastSwiftMigration = 2660;
@@ -128,11 +180,19 @@
 			projectRoot = "";
 			targets = (
 				2B9182C12FFA9018000E33CD /* CORE */,
+				2B6C2F9E307A743F0058250F /* RideauTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2B6C2F9D307A743F0058250F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2B9182C02FFA9018000E33CD /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -144,6 +204,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2B6C2F9B307A743F0058250F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2B9182BE2FFA9018000E33CD /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -155,7 +222,67 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		2B6C2FA4307A743F0058250F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2B9182C12FFA9018000E33CD /* CORE */;
+			targetProxy = 2B6C2FA3307A743F0058250F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		2B6C2FA5307A743F0058250F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 88HWZGF4LP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = SDS.CORE.RideauTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CORE.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CORE";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		2B6C2FA6307A743F0058250F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 88HWZGF4LP;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = SDS.CORE.RideauTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CORE.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/CORE";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
 		2B9182CB2FFA9018000E33CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2B01D44E2FFAEEB10097CA0E /* Secrets.xcconfig */;
@@ -284,7 +411,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = CORE/CORE.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.5.41;
+				CURRENT_PROJECT_VERSION = 1.6;
 				DEVELOPMENT_TEAM = 88HWZGF4LP;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -302,11 +429,11 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.5.41;
+				MARKETING_VERSION = 1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = SDS.CORE;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -333,7 +460,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = CORE/CORE.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1.5.41;
+				CURRENT_PROJECT_VERSION = 1.6;
 				DEVELOPMENT_TEAM = 88HWZGF4LP;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
@@ -351,11 +478,11 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.5.41;
+				MARKETING_VERSION = 1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = SDS.CORE;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -375,6 +502,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2B6C2FA7307A743F0058250F /* Build configuration list for PBXNativeTarget "RideauTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2B6C2FA5307A743F0058250F /* Debug */,
+				2B6C2FA6307A743F0058250F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		2B9182BD2FFA9018000E33CD /* Build configuration list for PBXProject "CORE" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -6,11 +6,13 @@ struct ContentCardEditorView: View {
     let onDeleted: (String) -> Void
 
     @EnvironmentObject private var cogWork: CogWorkService
+    @EnvironmentObject private var rideau: RideauEventsService
     @Environment(\.dismiss) private var dismiss
     @StateObject private var service = ContentCardsService()
     @State private var draft: ContentCardDraft
     @State private var linkDestinationType: ContentCardLinkDestinationType
     @State private var selectedEventId: Int?
+    @State private var selectedPerformanceSlug: String?
     @State private var hasExpiry: Bool
     @State private var isSaving = false
     @State private var isDeleting = false
@@ -28,6 +30,7 @@ struct ContentCardEditorView: View {
             let destination = card.appDestination?.trimmingCharacters(in: .whitespacesAndNewlines)
             let initialLinkDestinationType = Self.linkDestinationType(for: destination)
             let initialSelectedEventId = Self.selectedEventId(from: destination)
+            let initialSelectedPerformanceSlug = Self.selectedPerformanceSlug(from: destination)
             _draft = State(initialValue: ContentCardDraft(
                 type: card.type,
                 title: card.title,
@@ -46,11 +49,13 @@ struct ContentCardEditorView: View {
             ))
             _linkDestinationType = State(initialValue: initialLinkDestinationType)
             _selectedEventId = State(initialValue: initialSelectedEventId)
+            _selectedPerformanceSlug = State(initialValue: initialSelectedPerformanceSlug)
             _hasExpiry = State(initialValue: card.expiresAt != nil)
         } else {
             _draft = State(initialValue: ContentCardDraft())
             _linkDestinationType = State(initialValue: .external)
             _selectedEventId = State(initialValue: nil)
+            _selectedPerformanceSlug = State(initialValue: nil)
             _hasExpiry = State(initialValue: false)
         }
     }
@@ -86,11 +91,15 @@ struct ContentCardEditorView: View {
             if cogWork.events.isEmpty {
                 await cogWork.loadEvents()
             }
+            await rideau.loadIfNeeded()
         }
         .onChange(of: linkDestinationType) { _, _ in
             syncLinkDestination()
         }
         .onChange(of: selectedEventId) { _, _ in
+            syncLinkDestination()
+        }
+        .onChange(of: selectedPerformanceSlug) { _, _ in
             syncLinkDestination()
         }
     }
@@ -221,6 +230,8 @@ struct ContentCardEditorView: View {
                     .keyboardType(.URL)
             } else if linkDestinationType == .specificCourse {
                 CourseEventPicker(title: "Kurs", selectedEventId: $selectedEventId)
+            } else if linkDestinationType == .specificPerformance {
+                PerformanceEventPicker(selectedSlug: $selectedPerformanceSlug)
             }
 
             TextField("Länktext (t.ex. Anmäl dig)", text: $draft.linkLabel)
@@ -267,6 +278,7 @@ struct ContentCardEditorView: View {
     private var saveSection: some View {
         let titleEmpty = draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let missingCourse = linkDestinationType == .specificCourse && selectedEventId == nil
+        let missingPerformance = linkDestinationType == .specificPerformance && selectedPerformanceSlug == nil
         return Section {
             Button {
                 Task { await save() }
@@ -284,8 +296,8 @@ struct ContentCardEditorView: View {
                 }
                 .padding(.vertical, 10)
             }
-            .disabled(isSaving || isDeleting || titleEmpty || missingCourse)
-            .listRowBackground(titleEmpty || missingCourse ? Color.sdsSubtleSurface : Color.sdsMidGreen)
+            .disabled(isSaving || isDeleting || titleEmpty || missingCourse || missingPerformance)
+            .listRowBackground(titleEmpty || missingCourse || missingPerformance ? Color.sdsSubtleSurface : Color.sdsMidGreen)
             .foregroundColor(.sdsDarkGreen)
         }
     }
@@ -402,6 +414,16 @@ struct ContentCardEditorView: View {
             } else {
                 draft.appDestination = nil
             }
+        case .performances:
+            draft.linkUrl = ""
+            draft.appDestination = "forestallningar"
+        case .specificPerformance:
+            draft.linkUrl = ""
+            if let selectedPerformanceSlug {
+                draft.appDestination = "event:\(selectedPerformanceSlug)"
+            } else {
+                draft.appDestination = nil
+            }
         }
     }
 
@@ -409,13 +431,21 @@ struct ContentCardEditorView: View {
         guard let destination, !destination.isEmpty else { return .external }
         if destination == "kurser" { return .courses }
         if destination == "schema" { return .schedule }
+        if destination == "forestallningar" { return .performances }
         if destination.hasPrefix("course:") { return .specificCourse }
+        if destination.hasPrefix("event:") { return .specificPerformance }
         return .external
     }
 
     private static func selectedEventId(from destination: String?) -> Int? {
         guard let destination, destination.hasPrefix("course:") else { return nil }
         return Int(destination.replacingOccurrences(of: "course:", with: ""))
+    }
+
+    private static func selectedPerformanceSlug(from destination: String?) -> String? {
+        guard let destination, destination.hasPrefix("event:") else { return nil }
+        let slug = destination.replacingOccurrences(of: "event:", with: "")
+        return slug.isEmpty ? nil : slug
     }
 
     private static func parseDate(_ string: String) -> Date? {
@@ -446,6 +476,8 @@ private enum ContentCardLinkDestinationType: String, CaseIterable, Identifiable 
     case courses
     case schedule
     case specificCourse
+    case performances
+    case specificPerformance
 
     var id: Self { self }
 
@@ -455,6 +487,24 @@ private enum ContentCardLinkDestinationType: String, CaseIterable, Identifiable 
         case .courses: "Kurser-fliken"
         case .schedule: "Schema-fliken"
         case .specificCourse: "En specifik kurs"
+        case .performances: "Föreställningar-fliken"
+        case .specificPerformance: "En specifik föreställning"
         }
+    }
+}
+
+private struct PerformanceEventPicker: View {
+    @EnvironmentObject private var rideau: RideauEventsService
+    @Binding var selectedSlug: String?
+
+    var body: some View {
+        Picker("Föreställning", selection: $selectedSlug) {
+            Text("Välj föreställning…").tag(Optional<String>.none)
+            ForEach(rideau.events) { event in
+                Text(event.title).tag(Optional(event.slug))
+            }
+        }
+        .pickerStyle(.menu)
+        .tint(.sdsDarkModeGreen)
     }
 }
