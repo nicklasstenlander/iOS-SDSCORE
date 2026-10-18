@@ -58,6 +58,9 @@ extension Color {
     static let sdsAmberAdaptiveSurface = Color.adaptive(light: "f8edc0", dark: "2a2517")
     static let sdsVioletAdaptiveSurface = Color.adaptive(light: "f0e7f4", dark: "251f28")
     static let sdsSkyAdaptiveSurface = Color.adaptive(light: "e2f0f4", dark: "18242a")
+    static let sdsAccent = Color.adaptive(light: "c0356b", dark: "ee7a9f")
+    static let sdsAccentPressed = Color(hex: "a82d5c")
+    static let sdsAccentSurface = Color.sdsPinkAdaptiveSurface
 }
 
 // MARK: - Delade UI-komponenter
@@ -138,6 +141,16 @@ struct SDSHeroHeader: View {
     }
 }
 
+struct SDSAccentButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 16
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Color.sdsAccentPressed : Color.sdsAccent)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
 struct SDSPrimaryButton: View {
     let title: String
     var isLoading: Bool = false
@@ -148,7 +161,7 @@ struct SDSPrimaryButton: View {
             HStack {
                 if isLoading {
                     ProgressView()
-                        .tint(.sdsDarkGreen)
+                        .tint(.white)
                 } else {
                     Text(title)
                         .font(SDSType.agrandir(17, weight: .bold))
@@ -158,10 +171,9 @@ struct SDSPrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 17)
-            .background(Color.sdsMidGreen)
-            .foregroundColor(.sdsDarkGreen)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .foregroundColor(.white)
         }
+        .buttonStyle(SDSAccentButtonStyle(cornerRadius: 16))
         .disabled(isLoading)
     }
 }
@@ -238,7 +250,7 @@ struct SDSPill: View {
                 .lineLimit(1)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
-                .background(isSelected ? Color.sdsTeal : Color.sdsSurface)
+                .background(isSelected ? Color.sdsAccent : Color.sdsSurface)
                 .foregroundColor(isSelected ? .white : .sdsDarkModeGreen)
                 .clipShape(Capsule())
                 .overlay(
