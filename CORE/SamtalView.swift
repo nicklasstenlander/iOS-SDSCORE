@@ -111,7 +111,7 @@ struct SamtalView: View {
                 }
                 DatePicker("", selection: $selectedDate, displayedComponents: .date)
                     .labelsHidden()
-                    .tint(.sdsDarkModeGreen)
+                    .tint(.sdsAccent)
             }
         }
     }
@@ -160,7 +160,7 @@ struct SamtalView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.sdsSubtleSurface)
                     .frame(height: 86)
-                    .overlay(ProgressView().tint(.sdsDarkModeGreen))
+                    .overlay(ProgressView().tint(.sdsAccent))
             }
         }
     }
@@ -316,7 +316,7 @@ private struct CallRowView: View {
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.bordered)
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
                 .accessibilityLabel("Ring upp")
 
                 Button(action: onSMS) {
@@ -324,7 +324,7 @@ private struct CallRowView: View {
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.bordered)
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
                 .accessibilityLabel("Skicka SMS")
             }
         }

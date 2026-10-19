@@ -21,7 +21,7 @@ struct AdminTabView: View {
             MerView()
                 .tabItem { Label("Mer", systemImage: "ellipsis.circle") }
         }
-        .tint(.sdsDarkModeGreen)
+        .tint(.sdsAccent)
     }
 }
 
@@ -90,14 +90,14 @@ struct WebSectionPlaceholderView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Image(systemName: section.icon)
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.sdsDarkGreen)
+                            .foregroundColor(.sdsAccent)
                             .frame(width: 48, height: 48)
-                            .background(Color.sdsLightGreen)
+                            .background(Color.sdsAccentSurface)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         Text(section.title)
                             .font(SDSType.agrandir(30, weight: .bold))
-                            .foregroundColor(.sdsDarkGreen)
+                            .foregroundColor(.sdsAccent)
 
                         Text(section.subtitle)
                             .font(SDSType.agrandir(15))
@@ -109,7 +109,7 @@ struct WebSectionPlaceholderView: View {
                     .background(Color.sdsCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.sdsLightGreen.opacity(0.7), lineWidth: 1)
+                            .stroke(Color.sdsAccent.opacity(0.35), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
@@ -122,7 +122,7 @@ struct WebSectionPlaceholderView: View {
                         ForEach(importedHints, id: \.self) { item in
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "checkmark.circle")
-                                    .foregroundColor(.sdsDarkGreen)
+                                    .foregroundColor(.sdsAccent)
                                 Text(item)
                                     .font(SDSType.agrandir(14))
                                     .foregroundColor(.sdsPrimaryText)
@@ -338,12 +338,12 @@ struct MerView: View {
         if let profile = auth.profile {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Color.sdsMidGreen)
+                    .fill(Color.sdsAccent)
                     .frame(width: 40, height: 40)
                     .overlay(
                         Text(String(profile.firstName.prefix(1)))
                             .font(SDSType.agrandir(16, weight: .bold))
-                            .foregroundColor(.sdsDarkGreen)
+                            .foregroundColor(.white)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {

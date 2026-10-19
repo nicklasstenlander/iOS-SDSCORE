@@ -97,7 +97,7 @@ struct AnmalningarView: View {
         Group {
             if cogWork.isLoading {
                 ProgressView()
-                    .tint(.sdsDarkModeGreen)
+                    .tint(.sdsAccent)
             } else {
                 Menu {
                     Button {
@@ -390,7 +390,7 @@ struct BookingDetailSheet: View {
                         if isLoadingCustomer {
                             HStack(spacing: 10) {
                                 ProgressView()
-                                    .tint(.sdsDarkModeGreen)
+                                    .tint(.sdsAccent)
                                 Text("Hämtar kunduppgifter...")
                                     .font(SDSType.agrandir(13, weight: .bold))
                                     .foregroundColor(.sdsSecondaryText)

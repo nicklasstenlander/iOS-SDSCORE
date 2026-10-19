@@ -184,7 +184,7 @@ struct CheckInView: View {
                 }
                 .pickerStyle(.menu)
                 .font(SDSType.agrandir(15, weight: .bold))
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
             }
 
             searchField
@@ -237,7 +237,7 @@ struct CheckInView: View {
         if isLoadingForms || formsService.isLoading {
             HStack(spacing: 10) {
                 ProgressView()
-                    .tint(.sdsDarkModeGreen)
+                    .tint(.sdsAccent)
                 Text("Laddar formulärsvar...")
                     .font(SDSType.agrandir(14, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)

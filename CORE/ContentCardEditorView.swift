@@ -125,20 +125,20 @@ struct ContentCardEditorView: View {
                 Text("Banner").tag("banner")
             }
             .pickerStyle(.menu)
-            .tint(.sdsDarkModeGreen)
+            .tint(.sdsAccent)
             .font(SDSType.agrandir(15))
 
             Toggle("Publicerad", isOn: $draft.published)
                 .font(SDSType.agrandir(14, weight: .bold))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
 
             Toggle("Visa på webben", isOn: $draft.showOnWeb)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
 
             Toggle("Visa i appen", isOn: $draft.showOnApp)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
 
             Stepper("Sorteringsordning: \(draft.sortOrder)", value: $draft.sortOrder, in: 0...999)
                 .font(SDSType.agrandir(14))
@@ -162,7 +162,7 @@ struct ContentCardEditorView: View {
             } else {
                 Toggle("Skicka pushnotis när kortet publiceras", isOn: $draft.sendPush)
                     .font(SDSType.agrandir(14))
-                    .tint(.sdsDarkGreen)
+                    .tint(.sdsAccent)
             }
         } header: {
             Text("Pushnotis")
@@ -205,7 +205,7 @@ struct ContentCardEditorView: View {
                                 .foregroundColor(.sdsPink)
                         case .empty:
                             ProgressView()
-                                .tint(.sdsDarkModeGreen)
+                                .tint(.sdsAccent)
                         @unknown default:
                             EmptyView()
                         }
@@ -219,7 +219,7 @@ struct ContentCardEditorView: View {
                 }
             }
             .pickerStyle(.menu)
-            .tint(.sdsDarkModeGreen)
+            .tint(.sdsAccent)
             .font(SDSType.agrandir(15))
 
             if linkDestinationType == .external {
@@ -247,11 +247,11 @@ struct ContentCardEditorView: View {
                 displayedComponents: [.date, .hourAndMinute]
             )
             .font(SDSType.agrandir(14))
-            .tint(.sdsDarkModeGreen)
+            .tint(.sdsAccent)
 
             Toggle("Slutdatum", isOn: $hasExpiry)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
                 .onChange(of: hasExpiry) { _, newValue in
                     if newValue && draft.expiresAt == nil {
                         draft.expiresAt = Calendar.current.date(byAdding: .month, value: 1, to: Date())
@@ -270,7 +270,7 @@ struct ContentCardEditorView: View {
                     displayedComponents: [.date, .hourAndMinute]
                 )
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
             }
         }
     }
@@ -287,7 +287,7 @@ struct ContentCardEditorView: View {
                     Spacer()
                     if isSaving {
                         ProgressView()
-                            .tint(.sdsDarkGreen)
+                            .tint(.sdsAccent)
                     } else {
                         Text("Spara")
                             .font(SDSType.agrandir(17, weight: .bold))
@@ -297,8 +297,8 @@ struct ContentCardEditorView: View {
                 .padding(.vertical, 10)
             }
             .disabled(isSaving || isDeleting || titleEmpty || missingCourse || missingPerformance)
-            .listRowBackground(titleEmpty || missingCourse || missingPerformance ? Color.sdsSubtleSurface : Color.sdsMidGreen)
-            .foregroundColor(.sdsDarkGreen)
+            .listRowBackground(titleEmpty || missingCourse || missingPerformance ? Color.sdsSubtleSurface : Color.sdsAccent)
+            .foregroundColor(titleEmpty || missingCourse || missingPerformance ? .sdsSecondaryText : .white)
         }
     }
 
@@ -505,6 +505,6 @@ private struct PerformanceEventPicker: View {
             }
         }
         .pickerStyle(.menu)
-        .tint(.sdsDarkModeGreen)
+        .tint(.sdsAccent)
     }
 }

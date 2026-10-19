@@ -47,7 +47,7 @@ struct FormBuilderView: View {
                 if isLoading && forms.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
-                            .tint(.sdsDarkModeGreen)
+                            .tint(.sdsAccent)
                         Text("Laddar formulär...")
                             .font(SDSType.agrandir(14, weight: .bold))
                             .foregroundColor(.sdsSecondaryText)
@@ -283,11 +283,11 @@ private struct FormBuilderEditorView: View {
                 Text("Stängt").tag("closed")
             }
             .pickerStyle(.menu)
-            .tint(.sdsDarkModeGreen)
+            .tint(.sdsAccent)
 
             Toggle("Aktivera incheckning för detta formulär", isOn: $enableCheckin)
                 .font(SDSType.agrandir(14, weight: .bold))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
                 .disabled(isSaving)
         }
     }
@@ -314,7 +314,7 @@ private struct FormBuilderEditorView: View {
         if isLoading {
             HStack(spacing: 10) {
                 ProgressView()
-                    .tint(.sdsDarkModeGreen)
+                    .tint(.sdsAccent)
                 Text("Laddar fält...")
                     .font(SDSType.agrandir(14, weight: .bold))
                     .foregroundColor(.sdsSecondaryText)
@@ -358,7 +358,7 @@ private struct FormBuilderEditorView: View {
                     Spacer()
                     if isSaving {
                         ProgressView()
-                            .tint(.sdsDarkGreen)
+                            .tint(.sdsAccent)
                     } else {
                         Text("Spara")
                             .font(SDSType.agrandir(17, weight: .bold))
@@ -368,8 +368,8 @@ private struct FormBuilderEditorView: View {
                 .padding(.vertical, 10)
             }
             .disabled(isLoading || isSaving || isDeleting)
-            .listRowBackground(Color.sdsMidGreen)
-            .foregroundColor(.sdsDarkGreen)
+            .listRowBackground(Color.sdsAccent)
+            .foregroundColor(.white)
         }
     }
 
@@ -603,13 +603,13 @@ private struct FormFieldEditorRow: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
 
                 TextField("Hjälptext", text: $field.helpText)
                     .font(SDSType.agrandir(15))
 
                 Toggle("Obligatoriskt", isOn: $field.required)
-                    .tint(.sdsDarkGreen)
+                    .tint(.sdsAccent)
 
                 HStack(spacing: 12) {
                     Button(action: moveUp) {
@@ -707,7 +707,7 @@ private struct FormOptionEditorRow: View {
 
             Toggle("Aktiv", isOn: $option.active)
                 .font(SDSType.agrandir(14, weight: .bold))
-                .tint(.sdsDarkGreen)
+                .tint(.sdsAccent)
 
             if isCourseChoice {
                 TextField("Dag/tid", text: $option.dayTime)
@@ -754,7 +754,7 @@ private struct FormCheckInToggleRow: View {
 
                 if isSaving {
                     ProgressView()
-                        .tint(.sdsDarkModeGreen)
+                        .tint(.sdsAccent)
                 }
             }
 
@@ -763,7 +763,7 @@ private struct FormCheckInToggleRow: View {
                 set: setEnabled
             ))
             .font(SDSType.agrandir(14, weight: .bold))
-            .tint(.sdsDarkGreen)
+            .tint(.sdsAccent)
             .disabled(isSaving)
         }
         .padding(.vertical, 8)

@@ -153,7 +153,7 @@ struct TodayScheduleView: View {
                 DatePicker("Välj datum", selection: $pickerDate, displayedComponents: .date)
                     .datePickerStyle(.graphical)
                     .labelsHidden()
-                    .tint(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .tint(mode == .public ? .sdsTeal : .sdsAccent)
 
                 Button {
                     pickerDate = Date()
@@ -230,7 +230,7 @@ struct TodayScheduleView: View {
 
     private var loadingPlaceholder: some View {
         VStack(spacing: 14) {
-            ProgressView().tint(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+            ProgressView().tint(mode == .public ? .sdsTeal : .sdsAccent)
             Text("Hämtar schema…")
                 .font(SDSType.agrandir(15))
                 .foregroundColor(.sdsMutedText)

@@ -142,10 +142,10 @@ struct KunderView: View {
 
                 Text("CogWork")
                     .font(SDSType.agrandir(12, weight: .bold))
-                    .foregroundColor(.sdsDarkModeGreen)
+                    .foregroundColor(.sdsAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.sdsLightGreenSurface)
+                    .background(Color.sdsAccentSurface)
                     .clipShape(Capsule())
             }
             .padding(.horizontal, 16)
@@ -192,12 +192,12 @@ private struct CustomerRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Circle()
-                .fill(Color.sdsMidGreen)
+                .fill(Color.sdsAccent)
                 .frame(width: 40, height: 40)
                 .overlay(
                     Text(initials)
                         .font(SDSType.agrandir(13, weight: .bold))
-                        .foregroundColor(.sdsDarkGreen)
+                        .foregroundColor(.white)
                 )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -459,10 +459,9 @@ private struct MissingCogWorkPasswordCard: View {
                     .font(SDSType.agrandir(15, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.sdsMidGreen)
-                    .foregroundColor(.sdsDarkGreen)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .foregroundColor(.white)
             }
+            .buttonStyle(SDSAccentButtonStyle(cornerRadius: 14))
         }
     }
 }
@@ -473,7 +472,7 @@ private struct LoadingCard: View {
     var body: some View {
         VStack(spacing: 12) {
             ProgressView()
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
             Text(message)
                 .font(SDSType.agrandir(15, weight: .bold))
                 .foregroundColor(.sdsSecondaryText)
@@ -492,7 +491,7 @@ private struct EmptyStateCard: View {
     let icon: String
     let title: String
     let message: String
-    var tint: Color = .sdsDarkModeGreen
+    var tint: Color = .sdsAccent
 
     var body: some View {
         VStack(spacing: 12) {
@@ -500,7 +499,7 @@ private struct EmptyStateCard: View {
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundColor(tint)
                 .frame(width: 56, height: 56)
-                .background(Color.sdsLightGreenSurface)
+                .background(Color.sdsAccentSurface)
                 .clipShape(Circle())
 
             Text(title)

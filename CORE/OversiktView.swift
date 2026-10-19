@@ -144,7 +144,7 @@ struct OversiktView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("\(todayLabel)\(periodCode.isEmpty ? "" : " · \(periodCode)")")
                 .font(SDSType.agrandir(12, weight: .bold))
-                .foregroundColor(.adaptive(light: "009399", dark: "A0C4B9"))
+                .foregroundColor(.sdsAccent)
                 .textCase(.uppercase)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -160,7 +160,7 @@ struct OversiktView: View {
             if cogWork.isLoading {
                 ProgressView("Hämtar data...")
                     .font(SDSType.agrandir(15, weight: .bold))
-                    .tint(.sdsDarkGreen)
+                    .tint(.sdsAccent)
             } else if !statLine.isEmpty {
                 Text(statLine)
                     .font(SDSType.agrandir(14))
@@ -232,7 +232,7 @@ struct OversiktView: View {
 
                 if goals.isLoading {
                     ProgressView()
-                        .tint(.sdsDarkModeGreen)
+                        .tint(.sdsAccent)
                 } else {
                     Button {
                         Task { await goals.loadGoals() }
@@ -315,7 +315,7 @@ struct OversiktView: View {
                         if isRefreshingCourseRows {
                             ProgressView()
                                 .scaleEffect(0.7)
-                                .tint(.sdsDarkModeGreen)
+                                .tint(.sdsAccent)
                         }
                     }
 
@@ -1154,9 +1154,9 @@ private struct AddGoalCard: View {
         VStack(spacing: 16) {
             Image(systemName: "plus")
                 .font(.system(size: 34, weight: .bold))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(.sdsAccent)
                 .frame(width: 72, height: 72)
-                .background(Color.sdsLightGreenSurface)
+                .background(Color.sdsAccentSurface)
                 .clipShape(Circle())
 
             VStack(spacing: 5) {
@@ -1445,8 +1445,8 @@ private struct GoalProgressCard: View {
         .background(
             LinearGradient(
                 colors: [
-                    Color(hex: "45aba5"),
-                    Color(hex: "2f8f8a")
+                    Color.sdsAccent,
+                    Color.sdsAccentPressed
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -1457,7 +1457,7 @@ private struct GoalProgressCard: View {
                 .stroke(Color.white.opacity(0.22), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 22))
-        .shadow(color: Color(hex: "45aba5").opacity(0.24), radius: 16, x: 0, y: 10)
+        .shadow(color: Color.sdsAccent.opacity(0.24), radius: 16, x: 0, y: 10)
     }
 
     private var deadlineText: String {

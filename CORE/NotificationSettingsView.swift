@@ -85,7 +85,7 @@ struct NotificationSettingsView: View {
         Section("Allmänt") {
             Toggle("Nyheter från skolan", isOn: $push.prefs.notifyNews)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
                 .onChange(of: push.prefs.notifyNews) { _, _ in
                     Task { await push.updatePreferences() }
                 }
@@ -132,13 +132,13 @@ struct NotificationSettingsView: View {
         Section("Admin") {
             Toggle("Nya anmälningar", isOn: $push.prefs.notifyNewBookings)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
                 .onChange(of: push.prefs.notifyNewBookings) { _, _ in
                     Task { await push.updatePreferences() }
                 }
             Toggle("Betalningar", isOn: $push.prefs.notifyPayments)
                 .font(SDSType.agrandir(14))
-                .tint(.sdsDarkModeGreen)
+                .tint(.sdsAccent)
                 .onChange(of: push.prefs.notifyPayments) { _, _ in
                     Task { await push.updatePreferences() }
                 }

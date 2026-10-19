@@ -168,10 +168,9 @@ struct LoginView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 68)
-                .background(Color.sdsTeal)
                 .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            .buttonStyle(SDSAccentButtonStyle(cornerRadius: 12))
             .disabled(auth.isLoading)
             .padding(.top, 18)
 

@@ -36,7 +36,7 @@ struct ContentCardsAdminView: View {
                 if isLoading && cards.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
-                            .tint(.sdsDarkModeGreen)
+                            .tint(.sdsAccent)
                         Text("Laddar kort...")
                             .font(SDSType.agrandir(14, weight: .bold))
                             .foregroundColor(.sdsSecondaryText)
@@ -169,12 +169,15 @@ private struct CardRowView: View {
             Spacer()
 
             HStack(spacing: 2) {
-                Text("🌐")
+                Image(systemName: "globe")
                     .opacity(card.showOnWeb ? 1.0 : 0.25)
-                Text("📱")
+                    .accessibilityLabel("Visas på webben")
+                Image(systemName: "iphone")
                     .opacity(card.showOnApp ? 1.0 : 0.25)
+                    .accessibilityLabel("Visas i appen")
             }
             .font(.system(size: 13))
+            .foregroundColor(.sdsSecondaryText)
         }
         .padding(.vertical, 4)
     }

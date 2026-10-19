@@ -107,7 +107,7 @@ struct SendNotificationView: View {
                 }
             }
             .pickerStyle(.menu)
-            .tint(.sdsDarkModeGreen)
+            .tint(.sdsAccent)
 
             if audience == .courseFollowers {
                 CourseEventPicker(title: "Kurs", selectedEventId: $selectedEventId)
@@ -147,7 +147,7 @@ struct SendNotificationView: View {
                 HStack {
                     Spacer()
                     if isSending {
-                        ProgressView().tint(.sdsDarkGreen)
+                        ProgressView().tint(.sdsAccent)
                     } else {
                         Text("Skicka notis")
                             .font(SDSType.agrandir(17, weight: .bold))
@@ -157,8 +157,8 @@ struct SendNotificationView: View {
                 .padding(.vertical, 10)
             }
             .disabled(!canSend || isSending)
-            .listRowBackground(canSend && !isSending ? Color.sdsMidGreen : Color.sdsSubtleSurface)
-            .foregroundColor(.sdsDarkGreen)
+            .listRowBackground(canSend && !isSending ? Color.sdsAccent : Color.sdsSubtleSurface)
+            .foregroundColor(canSend && !isSending ? .white : .sdsSecondaryText)
         }
     }
 
@@ -277,6 +277,6 @@ struct CourseEventPicker: View {
             }
         }
         .pickerStyle(.menu)
-        .tint(.sdsDarkModeGreen)
+        .tint(.sdsAccent)
     }
 }
