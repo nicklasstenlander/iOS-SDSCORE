@@ -88,32 +88,19 @@ final class PushNotificationService: ObservableObject {
     }
 
     private func sendRegistration(token: String) async {
-        let auth = SupabaseAuthService.shared
-
-        var payload: [String: Any] = [
+        let payload: [String: Any] = [
             "deviceToken": token,
             "notifyNews": prefs.notifyNews,
             "notifyNewBookings": prefs.notifyNewBookings,
             "notifyPayments": prefs.notifyPayments,
             "followedEventIds": prefs.followedEventIds,
         ]
-        if let userId = auth.profile?.id { payload["userId"] = userId }
-        if let role = auth.profile?.role { payload["role"] = role }
 
-        guard let url = URL(string: "\(workerBaseURL)/push/register-device"),
-              let body = try? JSONSerialization.data(withJSONObject: payload)
-        else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
+        guard let url = URL(string: "\(workerBaseURL)/push/register-device") else { return }
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                updateError = "Kunde inte registrera enhet för notiser."
-            }
+            let request = try APIClient.request(url: url, method: "POST", jsonBody: payload)
+            _ = try await APIClient.data(for: request)
         } catch {
             updateError = "Kunde inte registrera enhet för notiser."
         }
@@ -125,33 +112,21 @@ final class PushNotificationService: ObservableObject {
         savePrefsToDefaults()
         updateError = nil
 
-        let auth = SupabaseAuthService.shared
-
         guard let token = deviceToken,
               let url = URL(string: "\(workerBaseURL)/push/preferences")
         else { return }
 
-        var payload: [String: Any] = [
+        let payload: [String: Any] = [
             "deviceToken": token,
             "notifyNews": prefs.notifyNews,
             "notifyNewBookings": prefs.notifyNewBookings,
             "notifyPayments": prefs.notifyPayments,
             "followedEventIds": prefs.followedEventIds,
         ]
-        if let role = auth.profile?.role { payload["role"] = role }
-
-        guard let body = try? JSONSerialization.data(withJSONObject: payload) else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                updateError = "Kunde inte spara notisinställningar."
-            }
+            let request = try APIClient.request(url: url, method: "POST", jsonBody: payload)
+            _ = try await APIClient.data(for: request)
         } catch {
             updateError = "Kunde inte spara notisinställningar."
         }

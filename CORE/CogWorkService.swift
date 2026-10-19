@@ -4,7 +4,6 @@ import Combine
 @MainActor
 final class CogWorkService: ObservableObject {
     private let baseURL = "https://sds-cogwork-proxy.nicklas-stenlander.workers.dev"
-    private let publicBaseURL = "https://dans.se/api/public"
 
     @Published var bookings: [Booking] = []
     @Published var events: [Event] = []
@@ -22,18 +21,6 @@ final class CogWorkService: ObservableObject {
 
     private var lastFetch: Date?
     private let cacheLifetime: TimeInterval = 300
-
-    var cogWorkPassword: String {
-        get {
-            let stored = UserDefaults.standard.string(forKey: "sds_core_cogwork_password") ?? ""
-            if !stored.isEmpty { return stored }
-            return Bundle.main.object(forInfoDictionaryKey: "CogWorkSharedPassword") as? String ?? ""
-        }
-        set {
-            objectWillChange.send()
-            UserDefaults.standard.set(newValue, forKey: "sds_core_cogwork_password")
-        }
-    }
 
     /// Hämtar all data om cachen är äldre än 5 min eller om data saknas. Anropa force: true för pull-to-refresh.
     func loadAllDataIfNeeded(force: Bool = false) async {
@@ -54,20 +41,14 @@ final class CogWorkService: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
 
-        guard let url = URL(string: "\(baseURL)/?type=bookings") else { return }
-
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                errorMessage = "Kunde inte hämta anmälningar (serverfel)."
-                return
-            }
+            let data = try await proxyData(queryItems: [URLQueryItem(name: "type", value: "bookings")])
             let decoded = try JSONDecoder().decode(BookingsResponse.self, from: data)
             bookings = decoded.bookings
             lastUpdated = Date()
             recomputeDerivedValues()
         } catch {
-            errorMessage = "Kunde inte hämta anmälningar. \(error.localizedDescription)"
+            errorMessage = "Kunde inte hämta anmälningar. \(Self.readableErrorMessage(error))"
         }
     }
 
@@ -98,7 +79,7 @@ final class CogWorkService: ObservableObject {
         } catch let urlError as URLError where urlError.code == .cancelled {
             // URLSession cancelled by task lifecycle — not a user-visible error
         } catch {
-            errorMessage = "Kunde inte hämta översiktsdata. \(error.localizedDescription)"
+            errorMessage = "Kunde inte hämta översiktsdata. \(Self.readableErrorMessage(error))"
         }
     }
 
@@ -108,104 +89,76 @@ final class CogWorkService: ObservableObject {
         defer { isLoadingEvents = false }
 
         do {
-            let loadedEvents: [Event]
-            if hasCogWorkPassword {
-                let response: EventsResponse = try await publicAPI(path: "events", extra: eventBlockId.map { ["eventBlockId": $0] } ?? [:])
-                loadedEvents = response.events
-            } else {
-                var queryItems = [URLQueryItem(name: "type", value: "all")]
-                if let eventBlockId, !eventBlockId.isEmpty {
-                    queryItems.append(URLQueryItem(name: "eventBlockId", value: eventBlockId))
-                }
-                let data = try await proxyData(queryItems: queryItems)
-                let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
-                loadedEvents = decoded.events?.events ?? []
+            var queryItems = [URLQueryItem(name: "type", value: "all")]
+            if let eventBlockId, !eventBlockId.isEmpty {
+                queryItems.append(URLQueryItem(name: "eventBlockId", value: eventBlockId))
             }
-            events = loadedEvents
+            let data = try await proxyData(queryItems: queryItems)
+            let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
+            events = decoded.events?.events ?? []
             recomputeDerivedValues()
         } catch is CancellationError {
         } catch let urlError as URLError where urlError.code == .cancelled {
         } catch {
-            errorMessage = "Kunde inte hämta kurser. \(error.localizedDescription)"
+            errorMessage = "Kunde inte hämta kurser. \(Self.readableErrorMessage(error))"
         }
     }
 
     func searchUsers(query: String) async {
-        guard hasCogWorkPassword else {
-            errorMessage = "CogWork-lösenord krävs för kundsökning."
-            return
-        }
-
         isLoadingUsers = true
         errorMessage = nil
         defer { isLoadingUsers = false }
 
         do {
-            let response: UsersResponse = try await publicAPI(path: "users", extra: [
+            let response: UsersResponse = try await staffAPI(path: "users", extra: [
                 "textSearch": query,
                 "maxRows": "50"
             ])
             users = response.users
         } catch {
-            errorMessage = "Kunde inte söka kunder. \(Self.readableDecodingError(error))"
+            errorMessage = "Kunde inte söka kunder. \(Self.readableErrorMessage(error))"
         }
     }
 
     func loadUser(named name: String) async -> CogWorkUser? {
-        guard hasCogWorkPassword else {
-            errorMessage = "CogWork-lösenord krävs för kunduppgifter."
-            return nil
-        }
-
         isLoadingUsers = true
         errorMessage = nil
         defer { isLoadingUsers = false }
 
         do {
-            let response: UsersResponse = try await publicAPI(path: "users", extra: [
+            let response: UsersResponse = try await staffAPI(path: "users", extra: [
                 "name": name
             ])
             return response.users.first
         } catch {
-            errorMessage = "Kunde inte hämta kund. \(error.localizedDescription)"
+            errorMessage = "Kunde inte hämta kund. \(Self.readableErrorMessage(error))"
             return nil
         }
     }
 
     func loadBookings(forUserId userId: Int) async {
-        guard hasCogWorkPassword else {
-            errorMessage = "CogWork-lösenord krävs för deltagarens bokningar."
-            return
-        }
-
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
-            let response: BookingsResponse = try await publicAPI(path: "bookings", extra: [
+            let response: BookingsResponse = try await staffAPI(path: "bookings", extra: [
                 "userId": String(userId)
             ])
             selectedUserBookings = response.bookings
         } catch {
-            errorMessage = "Kunde inte hämta deltagarens bokningar. \(error.localizedDescription)"
-        }
-    }
-
-    func verifyCogWorkPassword(_ password: String) async -> Bool {
-        do {
-            let _: EventsResponse = try await publicAPI(path: "events", password: password, extra: [
-                "maxRows": "1"
-            ])
-            cogWorkPassword = password
-            return true
-        } catch {
-            return false
+            errorMessage = "Kunde inte hämta deltagarens bokningar. \(Self.readableErrorMessage(error))"
         }
     }
 
     /// Tvingar Workern att rensa cache och hämta färskt från CogWork ("Från CogWork"-knappen).
+    /// Admin-only: cachen delas av alla användare, så en felaktig rensning påverkar alla.
     func forceRefreshFromCogWork() async {
+        guard SupabaseAuthService.shared.isAdmin else {
+            errorMessage = "Saknar behörighet för detta."
+            return
+        }
+
         isLoading = true
         isLoadingEvents = true
         errorMessage = nil
@@ -225,7 +178,7 @@ final class CogWorkService: ObservableObject {
             lastFetch = Date()
             recomputeDerivedValues()
         } catch {
-            errorMessage = "Kunde inte rensa cache och hämta ny data. \(error.localizedDescription)"
+            errorMessage = "Kunde inte rensa cache och hämta ny data. \(Self.readableErrorMessage(error))"
         }
     }
 
@@ -333,28 +286,19 @@ final class CogWorkService: ObservableObject {
         return Int((Double(totalAccepted) / Double(totalMax) * 100).rounded())
     }
 
-    private var hasCogWorkPassword: Bool {
-        !cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
+    /// Hämtar data via Workern (sds-cogwork-proxy) med Supabase-JWT. Används för
+    /// de kombinerade `/?type=...`-rutterna som STAFF har tillgång till.
     private func proxyData(queryItems: [URLQueryItem]) async throws -> Data {
-        var components = URLComponents(string: baseURL + "/")
-        components?.queryItems = queryItems
-
-        guard let url = components?.url else {
+        guard let url = URL(string: baseURL + "/") else {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: url)
+        var request = try APIClient.request(url: url, queryItems: queryItems)
         // Vanliga apphämtningar ska ta senaste svaret från Cloudflare Proxy,
         // men inte tvinga Workern att gå hela vägen till CogWork.
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        return data
+        return try await APIClient.data(for: request)
     }
 
     private func purgeProxyCache() async throws {
@@ -362,59 +306,38 @@ final class CogWorkService: ObservableObject {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: purgeURL)
+        var request = try APIClient.request(url: purgeURL)
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
+        _ = try await APIClient.data(for: request)
     }
 
-    private func publicAPI<T: Decodable>(
+    /// Hämtar kund-/bokningsdata via Workerns STAFF-skyddade `/cogwork/<path>`-rutter.
+    private func staffAPI<T: Decodable>(
         path: String,
-        password: String? = nil,
-        extra: [String: String] = [:],
-        verbose: Bool = true
+        extra: [String: String] = [:]
     ) async throws -> T {
-        var components = URLComponents(string: "\(publicBaseURL)/\(path)/")
-        var queryItems: [URLQueryItem] = [URLQueryItem(name: "org", value: "sollentunadans")]
-        if verbose {
-            queryItems.append(URLQueryItem(name: "verbose", value: "1"))
-        }
-        queryItems.append(URLQueryItem(name: "maxRows", value: "1000"))
-
-        let passwordValue = password ?? cogWorkPassword
-        if !passwordValue.isEmpty {
-            queryItems.append(URLQueryItem(name: "pw", value: passwordValue))
-        }
-
-        for (key, value) in extra where !value.isEmpty {
-            queryItems.removeAll { $0.name == key }
-            queryItems.append(URLQueryItem(name: key, value: value))
-        }
-
-        components?.queryItems = queryItems
-
-        guard let url = components?.url else {
+        guard let url = URL(string: "\(baseURL)/cogwork/\(path)") else {
             throw URLError(.badURL)
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.userAuthenticationRequired)
-        }
+        let queryItems = extra
+            .filter { !$0.value.isEmpty }
+            .map { URLQueryItem(name: $0.key, value: $0.value) }
 
-        if let apiError = try? JSONDecoder().decode(CogWorkErrorResponse.self, from: data),
-           let firstError = apiError.firstError {
-            throw CogWorkAPIError.message(firstError)
-        }
-
-        return try JSONDecoder().decode(T.self, from: data)
+        let request = try APIClient.request(url: url, queryItems: queryItems)
+        return try await APIClient.json(T.self, for: request)
     }
 }
 
 private extension CogWorkService {
+    static func readableErrorMessage(_ error: Error) -> String {
+        if let apiError = error as? APIClientError {
+            return apiError.localizedDescription
+        }
+        return readableDecodingError(error)
+    }
+
     static func readableDecodingError(_ error: Error) -> String {
         guard let decodingError = error as? DecodingError else {
             return error.localizedDescription
@@ -437,36 +360,5 @@ private extension CogWorkService {
     static func path(_ codingPath: [CodingKey]) -> String {
         let value = codingPath.map(\.stringValue).joined(separator: ".")
         return value.isEmpty ? "rot" : value
-    }
-}
-
-private struct CogWorkErrorResponse: Decodable {
-    let firstError: String?
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let strings = try? container.decodeIfPresent([String].self, forKey: .errors) {
-            firstError = strings.first
-        } else if let objects = try? container.decodeIfPresent([CogWorkErrorObject].self, forKey: .errors) {
-            firstError = objects.first?.msg
-        } else {
-            firstError = nil
-        }
-    }
-
-    enum CodingKeys: String, CodingKey { case errors }
-}
-
-private struct CogWorkErrorObject: Decodable {
-    let msg: String?
-}
-
-private enum CogWorkAPIError: LocalizedError {
-    case message(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .message(let text): text
-        }
     }
 }

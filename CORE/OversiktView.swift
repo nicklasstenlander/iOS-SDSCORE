@@ -445,14 +445,16 @@ struct OversiktView: View {
                     .accessibilityLabel("Uppdatera mål")
                 }
 
-                Button {
-                    goalEditorMode = .create
-                } label: {
-                    Label("Nytt mål", systemImage: "plus")
-                        .font(SDSType.agrandir(13, weight: .bold))
+                if auth.isAdmin {
+                    Button {
+                        goalEditorMode = .create
+                    } label: {
+                        Label("Nytt mål", systemImage: "plus")
+                            .font(SDSType.agrandir(13, weight: .bold))
+                    }
+                    .foregroundColor(.sdsAccent)
+                    .accessibilityLabel("Skapa nytt mål")
                 }
-                .foregroundColor(.sdsAccent)
-                .accessibilityLabel("Skapa nytt mål")
             }
 
             if let errorMessage = goals.errorMessage {
@@ -467,26 +469,14 @@ struct OversiktView: View {
                 if horizontalSizeClass == .regular {
                     LazyVGrid(columns: goalColumns, spacing: 12) {
                         ForEach(activeGoals) { goal in
-                            Button {
-                                goalEditorMode = .edit(goal)
-                            } label: {
-                                GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Ändra mål \(goal.title)")
+                            goalCard(goal)
                         }
                     }
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(activeGoals) { goal in
-                                Button {
-                                    goalEditorMode = .edit(goal)
-                                } label: {
-                                    GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Ändra mål \(goal.title)")
+                                goalCard(goal)
                                 .containerRelativeFrame(.horizontal) { length, _ in max(260, length * 0.86) }
                                 .scrollTransition(.interactive, axis: .horizontal) { content, phase in
                                     content
@@ -505,6 +495,22 @@ struct OversiktView: View {
         .sheet(item: $goalEditorMode) { mode in
             GoalEditorSheet(mode: mode)
                 .environmentObject(goals)
+        }
+    }
+
+    /// Mål kan ses av alla STAFF-roller, men bara admin kan öppna redigeraren.
+    @ViewBuilder
+    private func goalCard(_ goal: Goal) -> some View {
+        if auth.isAdmin {
+            Button {
+                goalEditorMode = .edit(goal)
+            } label: {
+                GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ändra mål \(goal.title)")
+        } else {
+            GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
         }
     }
 

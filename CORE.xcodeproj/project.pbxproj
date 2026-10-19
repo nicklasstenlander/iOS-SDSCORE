@@ -10,6 +10,8 @@
 		2B01D44F2FFAEEB10097CA0E /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 2B01D44E2FFAEEB10097CA0E /* Secrets.xcconfig */; };
 		2B35B5F4300023640072F400 /* CourseCatalogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B35B5F3300023640072F400 /* CourseCatalogView.swift */; };
 		2B35B606300274F30072F400 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B35B605300274F30072F400 /* SafariView.swift */; };
+		2BF4F7B430867BD600B3C4AA /* Config.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 2BF4F7B330867BD600B3C4AA /* Config.xcconfig */; };
+		2BF4F7B630867BDB00B3C4AA /* Config.example.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 2BF4F7B530867BDB00B3C4AA /* Config.example.xcconfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,6 +31,8 @@
 		2B6C2F9F307A743F0058250F /* RideauTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RideauTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B9182C22FFA9018000E33CD /* CORE.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CORE.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B9182E32FFA94D6000E33CD /* CORE.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CORE.entitlements; sourceTree = "<group>"; };
+		2BF4F7B330867BD600B3C4AA /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		2BF4F7B530867BDB00B3C4AA /* Config.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -85,6 +89,8 @@
 				2B01D44E2FFAEEB10097CA0E /* Secrets.xcconfig */,
 				2B35B5F3300023640072F400 /* CourseCatalogView.swift */,
 				2B35B605300274F30072F400 /* SafariView.swift */,
+				2BF4F7B330867BD600B3C4AA /* Config.xcconfig */,
+				2BF4F7B530867BDB00B3C4AA /* Config.example.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -197,6 +203,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2BF4F7B630867BDB00B3C4AA /* Config.example.xcconfig in Resources */,
+				2BF4F7B430867BD600B3C4AA /* Config.xcconfig in Resources */,
 				2B01D44F2FFAEEB10097CA0E /* Secrets.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

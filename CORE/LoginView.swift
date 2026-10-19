@@ -2,7 +2,6 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var auth: SupabaseAuthService
-    @EnvironmentObject var cogWork: CogWorkService
     @State private var email = ""
     @State private var password = ""
     @State private var temporaryPassword = ""
@@ -212,7 +211,7 @@ struct LoginView: View {
                     }
                     .disabled(auth.isLoading || temporaryPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                    Text("Det tillfälliga lösenordet används också som CogWork API-lösenord.")
+                    Text("Ett tillfälligt lösenord skickas av administratören vid kontoskapande.")
                         .font(.custom("Agrandir-Regular", size: 12))
                         .foregroundColor(.sdsMutedText)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,14 +248,12 @@ struct LoginView: View {
         password = trimmedPassword
         await auth.signIn(email: email, password: trimmedPassword)
 
+        #if DEBUG
         if auth.isAuthenticated && auth.errorMessage == nil {
-            cogWork.cogWorkPassword = trimmedPassword
-
-            #if DEBUG
             DebugCredentialStore.email = email
             DebugCredentialStore.password = trimmedPassword
-            #endif
         }
+        #endif
     }
 
     private func logoSize(for width: CGFloat) -> CGFloat {

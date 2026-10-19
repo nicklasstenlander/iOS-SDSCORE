@@ -72,13 +72,10 @@ final class GoalsService: ObservableObject {
 
         do {
             let url = proxyURL.appending(path: "goals")
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                throw URLError(.badServerResponse)
-            }
-            goals = try JSONDecoder().decode([Goal].self, from: data)
+            let request = try APIClient.request(url: url)
+            goals = try await APIClient.json([Goal].self, for: request)
         } catch {
-            errorMessage = "Kunde inte hämta mål. \(error.localizedDescription)"
+            errorMessage = "Kunde inte hämta mål. \(Self.readableErrorMessage(error))"
         }
     }
 
@@ -95,13 +92,10 @@ final class GoalsService: ObservableObject {
         do {
             var request = URLRequest(url: proxyURL.appending(path: "goals/\(id)"))
             request.httpMethod = "DELETE"
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
+            _ = try await APIClient.data(for: request)
             goals.removeAll { $0.id == id }
         } catch {
-            errorMessage = "Kunde inte ta bort mål. \(error.localizedDescription)"
+            errorMessage = "Kunde inte ta bort mål. \(Self.readableErrorMessage(error))"
         }
     }
 
@@ -114,17 +108,17 @@ final class GoalsService: ObservableObject {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONEncoder().encode(input)
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-
-            let goal = try JSONDecoder().decode(Goal.self, from: data)
+            let goal = try await APIClient.json(Goal.self, for: request)
             await loadGoals()
             return goal
         } catch {
-            errorMessage = "Kunde inte spara mål. \(error.localizedDescription)"
+            errorMessage = "Kunde inte spara mål. \(Self.readableErrorMessage(error))"
             return nil
         }
+    }
+
+    private static func readableErrorMessage(_ error: Error) -> String {
+        guard let apiError = error as? APIClientError else { return error.localizedDescription }
+        return apiError.localizedDescription
     }
 }

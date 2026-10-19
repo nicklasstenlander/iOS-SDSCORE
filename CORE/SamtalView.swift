@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SamtalView: View {
     @EnvironmentObject private var cogWork: CogWorkService
-    @EnvironmentObject private var auth: SupabaseAuthService
     @StateObject private var telavox = TelavoxService()
 
     private let loadsOnAppear: Bool
@@ -58,8 +57,7 @@ struct SamtalView: View {
             .sheet(item: $smsDraft) { draft in
                 SMSComposerView(
                     draft: draft,
-                    telavox: telavox,
-                    telavoxAgent: auth.profile?.telavoxAgent
+                    telavox: telavox
                 )
             }
             .confirmationDialog(
@@ -362,21 +360,11 @@ private struct SMSComposerView: View {
 
     let draft: SMSDraft
     @ObservedObject var telavox: TelavoxService
-    let telavoxAgent: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var message = ""
-    @State private var sender = SDSPhoneNumbers.groupSender
     @State private var isSending = false
     @State private var resultMessage: String?
-
-    private var senderOptions: [String] {
-        let agent = telavoxAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let agent, !agent.isEmpty, agent != SDSPhoneNumbers.groupSender {
-            return [SDSPhoneNumbers.groupSender, agent]
-        }
-        return [SDSPhoneNumbers.groupSender]
-    }
 
     var body: some View {
         NavigationStack {
@@ -384,11 +372,6 @@ private struct SMSComposerView: View {
                 Section {
                     LabeledContent("Mottagare", value: draft.recipientName)
                     LabeledContent("Nummer", value: draft.number)
-                    Picker("Avsändare", selection: $sender) {
-                        ForEach(senderOptions, id: \.self) { option in
-                            Text(senderLabel(option)).tag(option)
-                        }
-                    }
                 }
 
                 Section("Mallar") {
@@ -449,16 +432,9 @@ private struct SMSComposerView: View {
                     .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
                 }
             }
-            .onAppear {
-                sender = senderOptions.first ?? SDSPhoneNumbers.groupSender
-            }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func senderLabel(_ option: String) -> String {
-        option == SDSPhoneNumbers.groupSender ? "Gruppnumret \(option)" : option
     }
 
     private func send() async {
@@ -467,8 +443,7 @@ private struct SMSComposerView: View {
 
         let ok = await telavox.sendSMS(
             number: draft.number,
-            message: message.trimmingCharacters(in: .whitespacesAndNewlines),
-            sender: sender
+            message: message.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         if ok {
             resultMessage = "SMS skickat."

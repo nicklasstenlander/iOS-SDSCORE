@@ -1,0 +1,6 @@
+// Kopiera till Config.xcconfig om du vill skriva över standardvärdena lokalt.
+// Inga hemligheter hör hemma här — appen autentiserar enbart med användarens
+// egen Supabase-JWT mot workern.
+WORKER_BASE_URL = https:/$()/sds-cogwork-proxy.nicklas-stenlander.workers.dev
+SUPABASE_URL = https:/$()/vuokkdtyhmhkvfizsnwm.supabase.co
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1b2trZHR5aG1oa3ZmaXpzbndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MjEzMDAsImV4cCI6MjA5ODM5NzMwMH0.n4LdnB4n_J3zqgzo6wLg3oZsdQtZobLoC-VA4X-S9qw

@@ -4,7 +4,6 @@ struct KunderView: View {
     @EnvironmentObject var cogWork: CogWorkService
     @State private var query = ""
     @State private var selectedUser: CogWorkUser?
-    @State private var isShowingCogWorkSettings = false
 
     var body: some View {
         NavigationStack {
@@ -14,11 +13,7 @@ struct KunderView: View {
 
                     searchField
 
-                    if cogWork.cogWorkPassword.isEmpty {
-                        MissingCogWorkPasswordCard {
-                            isShowingCogWorkSettings = true
-                        }
-                    } else if let errorMessage = cogWork.errorMessage, cogWork.users.isEmpty {
+                    if let errorMessage = cogWork.errorMessage, cogWork.users.isEmpty {
                         EmptyStateCard(
                             icon: "exclamationmark.triangle",
                             title: "Kunde inte hämta kunder",
@@ -48,29 +43,15 @@ struct KunderView: View {
             .navigationTitle("Kunder")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            Task { await search() }
-                        } label: {
-                            Label("Sök igen", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(!canSearch)
-
-                        Button {
-                            isShowingCogWorkSettings = true
-                        } label: {
-                            Label("CogWork API", systemImage: "key")
-                        }
+                    Button {
+                        Task { await search() }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.system(size: 18, weight: .semibold))
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
                     }
-                    .accessibilityLabel("Fler åtgärder")
+                    .disabled(!canSearch)
+                    .accessibilityLabel("Sök igen")
                 }
-            }
-            .sheet(isPresented: $isShowingCogWorkSettings) {
-                CogWorkAPISettingsSheet()
-                    .environmentObject(cogWork)
             }
             .sheet(item: $selectedUser) { user in
                 CustomerDetailSheet(user: user)
@@ -176,7 +157,7 @@ struct KunderView: View {
     }
 
     private var canSearch: Bool {
-        query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 && !cogWork.cogWorkPassword.isEmpty
+        query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
     }
 
     private func search() async {
@@ -440,29 +421,6 @@ private struct CustomerCourseRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.sdsSubtleSurface)
         .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-private struct MissingCogWorkPasswordCard: View {
-    let action: () -> Void
-
-    var body: some View {
-        VStack(spacing: 14) {
-            EmptyStateCard(
-                icon: "lock",
-                title: "CogWork-lösenord krävs",
-                message: "Kunddata kommer från CogWorks publika API. Lägg in lösenordet här eller via Mer > CogWork API."
-            )
-
-            Button(action: action) {
-                Label("Öppna CogWork API", systemImage: "key")
-                    .font(SDSType.agrandir(15, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .foregroundColor(.white)
-            }
-            .buttonStyle(SDSAccentButtonStyle(cornerRadius: 14))
-        }
     }
 }
 

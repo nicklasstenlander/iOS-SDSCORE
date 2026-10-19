@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CogWorkSharedPassword</key>
-	<string>$(COGWORK_SHARED_PW)</string>
 	<key>RideauAPIBase</key>
 	<string>https://oyqgxnmwojjjpoubdlfa.supabase.co/functions/v1</string>
 	<key>RideauOrganizer</key>

@@ -152,7 +152,6 @@ struct WebSectionPlaceholderView: View {
 struct MerView: View {
     @EnvironmentObject var auth: SupabaseAuthService
     @EnvironmentObject var cogWork: CogWorkService
-    @State private var isShowingCogWorkSettings = false
     @State private var callDirectoryStatus: String?
     @State private var isUpdatingCallDirectory = false
     @State private var dataRefreshStatus: String?
@@ -235,12 +234,14 @@ struct MerView: View {
                     }
                     .disabled(cogWork.isLoading)
 
-                    Button(role: .destructive) {
-                        Task { await purgeProxyAndRefresh() }
-                    } label: {
-                        Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                    if auth.isAdmin {
+                        Button(role: .destructive) {
+                            Task { await purgeProxyAndRefresh() }
+                        } label: {
+                            Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                        }
+                        .disabled(cogWork.isLoading)
                     }
-                    .disabled(cogWork.isLoading)
 
                     if let dataRefreshStatus {
                         Text(dataRefreshStatus)
@@ -304,14 +305,6 @@ struct MerView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button {
-                            isShowingCogWorkSettings = true
-                        } label: {
-                            Label("CogWork API", systemImage: "key")
-                        }
-
-                        Divider()
-
                         Button(role: .destructive) {
                             Task { await auth.signOut() }
                         } label: {
@@ -323,10 +316,6 @@ struct MerView: View {
                     }
                     .accessibilityLabel("Fler åtgärder")
                 }
-            }
-            .sheet(isPresented: $isShowingCogWorkSettings) {
-                CogWorkAPISettingsSheet()
-                    .environmentObject(cogWork)
             }
             .scrollContentBackground(.hidden)
             .background(Color.sdsPageBackground)
@@ -384,74 +373,6 @@ struct MerView: View {
         dataRefreshStatus = cogWork.errorMessage ?? "Proxy rensad och ny data hämtad från CogWork."
     }
 
-}
-
-struct CogWorkAPISettingsSheet: View {
-    @EnvironmentObject var cogWork: CogWorkService
-    @Environment(\.dismiss) private var dismiss
-    @State private var cogWorkPassword = ""
-    @State private var isVerifyingPassword = false
-    @State private var passwordMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    SecureField("CogWork-lösenord", text: $cogWorkPassword)
-                        .font(SDSType.agrandir(15))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    if let passwordMessage {
-                        Text(passwordMessage)
-                            .font(SDSType.agrandir(13))
-                            .foregroundColor(passwordMessage.contains("sparat") ? .sdsDarkModeGreen : .sdsPink)
-                    }
-                } header: {
-                    Text("API")
-                } footer: {
-                    Text("Används för kunddata och andra CogWork-endpoints som kräver lösenord.")
-                }
-            }
-            .font(SDSType.agrandir(15))
-            .navigationTitle("CogWork API")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Stäng") { dismiss() }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await verifyCogWorkPassword() }
-                    } label: {
-                        if isVerifyingPassword {
-                            ProgressView()
-                        } else {
-                            Text("Spara")
-                        }
-                    }
-                    .disabled(cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isVerifyingPassword)
-                }
-            }
-            .onAppear {
-                cogWorkPassword = cogWork.cogWorkPassword
-            }
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
-
-    private func verifyCogWorkPassword() async {
-        isVerifyingPassword = true
-        defer { isVerifyingPassword = false }
-
-        let ok = await cogWork.verifyCogWorkPassword(cogWorkPassword)
-        passwordMessage = ok ? "CogWork-lösenord sparat." : "Kunde inte verifiera lösenordet."
-        if ok {
-            dismiss()
-        }
-    }
 }
 
 #Preview {

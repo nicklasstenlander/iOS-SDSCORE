@@ -48,13 +48,11 @@ struct RootView: View {
                 .environmentObject(push)
         }
         .task {
-            syncDebugCogWorkPasswordIfNeeded()
             // Icke-blockerande förhämtning av appdata parallellt med auth
             Task { await cogWork.loadAllDataIfNeeded() }
             Task { await rideau.loadIfNeeded() }
         }
         .onChange(of: auth.isAuthenticated) { _, _ in
-            syncDebugCogWorkPasswordIfNeeded()
             Task { await PushNotificationService.shared.reRegisterIfNeeded() }
         }
         .onChange(of: auth.profile) { _, profile in
@@ -65,17 +63,5 @@ struct RootView: View {
             guard newPhase == .active else { return }
             Task { await rideau.loadIfNeeded() }
         }
-    }
-
-    private func syncDebugCogWorkPasswordIfNeeded() {
-        #if DEBUG
-        guard auth.isAuthenticated,
-              cogWork.cogWorkPassword.isEmpty,
-              !DebugCredentialStore.cogWorkPassword.isEmpty else {
-            return
-        }
-
-        cogWork.cogWorkPassword = DebugCredentialStore.cogWorkPassword
-        #endif
     }
 }

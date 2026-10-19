@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AnmalningarView: View {
+    @EnvironmentObject var auth: SupabaseAuthService
     @EnvironmentObject var cogWork: CogWorkService
     @State private var searchText = ""
     @State private var paymentFilter = PaymentFilter.all
@@ -106,10 +107,12 @@ struct AnmalningarView: View {
                         Label("Hämta senaste från proxy", systemImage: "arrow.clockwise")
                     }
 
-                    Button(role: .destructive) {
-                        Task { await cogWork.forceRefreshFromCogWork() }
-                    } label: {
-                        Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                    if auth.isAdmin {
+                        Button(role: .destructive) {
+                            Task { await cogWork.forceRefreshFromCogWork() }
+                        } label: {
+                            Label("Rensa proxy och hämta från CogWork", systemImage: "trash.circle")
+                        }
                     }
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -484,8 +487,7 @@ struct BookingDetailSheet: View {
     }
 
     private func loadCustomer() async {
-        guard !cogWork.cogWorkPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let name = booking.participant?.name?.nilIfEmpty else {
+        guard let name = booking.participant?.name?.nilIfEmpty else {
             return
         }
 

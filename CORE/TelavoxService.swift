@@ -211,46 +211,40 @@ final class TelavoxService: ObservableObject {
 
     func dial(number: String) async -> Bool {
         do {
-            let _: EmptyTelavoxResponse = try await get(path: "dial", queryItems: [
-                URLQueryItem(name: "number", value: number)
-            ])
+            _ = try await post(path: "dial", jsonBody: ["number": number])
             return true
         } catch {
-            errorMessage = "Kunde inte starta samtalet."
+            errorMessage = Self.readableErrorMessage(error, fallback: "Kunde inte starta samtalet.")
             return false
         }
     }
 
-    func sendSMS(number: String, message: String, sender: String) async -> Bool {
+    /// Avsändaren låses av Workern server-side — appen skickar inget `sender`-fält.
+    func sendSMS(number: String, message: String) async -> Bool {
         do {
-            let _: EmptyTelavoxResponse = try await get(path: "sms", queryItems: [
-                URLQueryItem(name: "number", value: number),
-                URLQueryItem(name: "message", value: message),
-                URLQueryItem(name: "sender", value: sender)
-            ])
+            _ = try await post(path: "sms", jsonBody: ["number": number, "message": message])
             return true
         } catch {
-            errorMessage = "Kunde inte skicka SMS."
+            errorMessage = Self.readableErrorMessage(error, fallback: "Kunde inte skicka SMS.")
             return false
         }
     }
 
     private func get<T: Decodable>(path: String, queryItems: [URLQueryItem]) async throws -> T {
-        var components = URLComponents(string: "\(baseURL)/telavox/\(path)")
-        components?.queryItems = queryItems
-        guard let url = components?.url else { throw URLError(.badURL) }
+        guard let url = URL(string: "\(baseURL)/telavox/\(path)") else { throw URLError(.badURL) }
+        let request = try APIClient.request(url: url, queryItems: queryItems)
+        return try await APIClient.json(T.self, for: request)
+    }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-        if T.self == EmptyTelavoxResponse.self {
-            return EmptyTelavoxResponse() as! T
-        }
-        if data.isEmpty {
-            throw URLError(.zeroByteResource)
-        }
-        return try JSONDecoder().decode(T.self, from: data)
+    private func post(path: String, jsonBody: [String: Any]) async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/telavox/\(path)") else { throw URLError(.badURL) }
+        let request = try APIClient.request(url: url, method: "POST", jsonBody: jsonBody)
+        return try await APIClient.data(for: request)
+    }
+
+    private static func readableErrorMessage(_ error: Error, fallback: String) -> String {
+        guard let apiError = error as? APIClientError else { return fallback }
+        return apiError.localizedDescription
     }
 
     private static let dayFormatter: DateFormatter = {

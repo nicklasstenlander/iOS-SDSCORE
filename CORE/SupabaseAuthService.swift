@@ -25,9 +25,29 @@ final class SupabaseAuthService: ObservableObject {
     private let refreshKey = "sds_core_refresh_token"
     private let userIdKey = "sds_core_user_id"
     private let expiresAtKey = "sds_core_expires_at"
+    private static let keychainMigrationFlag = "sds_core_keychain_migrated_v1"
 
     init() {
+        migrateFromUserDefaultsIfNeeded()
         Task { await restoreSession() }
+    }
+
+    /// Engångsmigrering: gamla installationer hade access/refresh-token, user id
+    /// och expiry i UserDefaults. Flyttar dem till Keychain och rensar UserDefaults.
+    private func migrateFromUserDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.keychainMigrationFlag) else { return }
+
+        for key in [tokenKey, refreshKey, userIdKey, expiresAtKey] {
+            if let stringValue = defaults.string(forKey: key) {
+                KeychainStore.set(stringValue, for: key)
+            } else if let doubleValue = defaults.object(forKey: key) as? Double {
+                KeychainStore.set(String(doubleValue), for: key)
+            }
+            defaults.removeObject(forKey: key)
+        }
+
+        defaults.set(true, forKey: Self.keychainMigrationFlag)
     }
 
     // MARK: - Inloggning
@@ -80,10 +100,10 @@ final class SupabaseAuthService: ObservableObject {
         accessToken = nil
         profile = nil
         isAuthenticated = false
-        UserDefaults.standard.removeObject(forKey: tokenKey)
-        UserDefaults.standard.removeObject(forKey: refreshKey)
-        UserDefaults.standard.removeObject(forKey: userIdKey)
-        UserDefaults.standard.removeObject(forKey: expiresAtKey)
+        KeychainStore.delete(tokenKey)
+        KeychainStore.delete(refreshKey)
+        KeychainStore.delete(userIdKey)
+        KeychainStore.delete(expiresAtKey)
     }
 
     // Stänger alla presenterade vyer (sheets, fullScreenCovers) innan
@@ -107,13 +127,13 @@ final class SupabaseAuthService: ObservableObject {
     private func restoreSession() async {
         defer { isLoading = false }
 
-        guard let token = UserDefaults.standard.string(forKey: tokenKey) else { return }
+        guard let token = KeychainStore.get(tokenKey) else { return }
         accessToken = token
 
         do {
             let validToken = try await validAccessToken()
-            if let userId = UserDefaults.standard.string(forKey: userIdKey) ?? userIdFromJWT(validToken) {
-                UserDefaults.standard.set(userId, forKey: userIdKey)
+            if let userId = KeychainStore.get(userIdKey) ?? userIdFromJWT(validToken) {
+                KeychainStore.set(userId, for: userIdKey)
                 isAuthenticated = true
                 await loadProfile(userId: userId)
             } else {
@@ -138,7 +158,7 @@ final class SupabaseAuthService: ObservableObject {
     }
 
     func validAccessToken() async throws -> String {
-        if let token = accessToken ?? UserDefaults.standard.string(forKey: tokenKey),
+        if let token = accessToken ?? KeychainStore.get(tokenKey),
            !shouldRefreshToken() {
             accessToken = token
             return token
@@ -184,7 +204,9 @@ final class SupabaseAuthService: ObservableObject {
         return data
     }
 
-    private func refreshAccessToken() async throws -> String {
+    /// Internal (inte private) så att APIClient kan tvinga fram en förnyelse
+    /// vid 401 från workern, oavsett lokalt uppskattad utgångstid.
+    func refreshAccessToken() async throws -> String {
         if let refreshTask {
             return try await refreshTask.value
         }
@@ -204,7 +226,7 @@ final class SupabaseAuthService: ObservableObject {
     }
 
     private func performRefresh() async throws -> String {
-        guard let refreshToken = UserDefaults.standard.string(forKey: refreshKey),
+        guard let refreshToken = KeychainStore.get(refreshKey),
               let url = URL(string: "\(supabaseURL)/auth/v1/token?grant_type=refresh_token") else {
             throw AuthSessionError.missingRefreshToken
         }
@@ -230,22 +252,21 @@ final class SupabaseAuthService: ObservableObject {
     }
 
     private func storeSession(_ response: AuthTokenResponse) {
-        // TODO: flytta till Keychain före bredare distribution.
         let expiresAt = response.expiresAt.map(Date.init(timeIntervalSince1970:))
             ?? Date().addingTimeInterval(TimeInterval(response.expiresIn ?? 3600))
 
         accessToken = response.accessToken
-        UserDefaults.standard.set(response.accessToken, forKey: tokenKey)
-        UserDefaults.standard.set(response.refreshToken, forKey: refreshKey)
-        UserDefaults.standard.set(response.user.id, forKey: userIdKey)
-        UserDefaults.standard.set(expiresAt.timeIntervalSince1970, forKey: expiresAtKey)
+        KeychainStore.set(response.accessToken, for: tokenKey)
+        KeychainStore.set(response.refreshToken, for: refreshKey)
+        KeychainStore.set(response.user.id, for: userIdKey)
+        KeychainStore.set(String(expiresAt.timeIntervalSince1970), for: expiresAtKey)
     }
 
     private func shouldRefreshToken(date: Date = Date()) -> Bool {
-        let storedExpiry = UserDefaults.standard.object(forKey: expiresAtKey) as? Double
+        let storedExpiry = KeychainStore.get(expiresAtKey).flatMap(Double.init)
         let expiresAt = storedExpiry.map { Date(timeIntervalSince1970: $0) }
             ?? accessToken.flatMap(jwtExpirationDate)
-            ?? UserDefaults.standard.string(forKey: tokenKey).flatMap(jwtExpirationDate)
+            ?? KeychainStore.get(tokenKey).flatMap(jwtExpirationDate)
 
         guard let expiresAt else { return true }
         return expiresAt.timeIntervalSince(date) <= refreshThreshold
