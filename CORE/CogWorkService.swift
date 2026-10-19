@@ -275,10 +275,12 @@ final class CogWorkService: ObservableObject {
     /// Matchar webbens `alerts.length` i Dashboard.
     var pendingReviewCount: Int {
         let newCount = statisticalPeriodBookings.filter(\.isPendingReviewForOverview).count
-        return newCount + deduplicatedDuplicateCount
+        return newCount + duplicateCount
     }
 
-    private var deduplicatedDuplicateCount: Int {
+    /// Deduplicerat antal dubbelanmälningar i vald period. Exponerad (inte privat) så att
+    /// OversiktView kan visa den separat från pendingReviewCount, som redan summerar in den.
+    var duplicateCount: Int {
         let lookup = eventLookup
         let excludedEventIds = Set(
             events.compactMap { event -> Int? in

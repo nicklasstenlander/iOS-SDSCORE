@@ -28,7 +28,7 @@ struct ContentCardsAdminView: View {
                 } label: {
                     Label("Skapa nytt kort", systemImage: "plus.circle.fill")
                         .font(SDSType.agrandir(16, weight: .bold))
-                        .foregroundColor(.sdsDarkModeGreen)
+                        .foregroundColor(.sdsAccent)
                 }
             }
 

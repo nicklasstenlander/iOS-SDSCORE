@@ -39,7 +39,7 @@ struct FormBuilderView: View {
                 } label: {
                     Label("Skapa nytt formulär", systemImage: "plus.circle.fill")
                         .font(SDSType.agrandir(16, weight: .bold))
-                        .foregroundColor(.sdsDarkModeGreen)
+                        .foregroundColor(.sdsAccent)
                 }
             }
 
@@ -661,7 +661,7 @@ private struct FormFieldEditorRow: View {
                     Label("Lägg till alternativ", systemImage: "plus")
                 }
                 .font(SDSType.agrandir(12, weight: .bold))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(.sdsAccent)
             }
 
             if field.options.isEmpty {

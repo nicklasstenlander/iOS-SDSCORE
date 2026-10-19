@@ -12,6 +12,7 @@ struct OversiktView: View {
     @State private var cachedOverviewCards: [OverviewCard] = []
     @State private var courseSort = CourseOverviewSort.attention
     @State private var courseSearchText = ""
+    @State private var courseFilter = CourseRowFilter.all
     @State private var contentWidth: CGFloat = 0
     @State private var cachedCourseRows: [CourseOverviewData] = []
     @State private var isRefreshingCourseRows = false
@@ -24,40 +25,46 @@ struct OversiktView: View {
     private var statisticalPeriodBookings: [Booking] { cogWork.statisticalPeriodBookings }
     private var eventLookup: [String: Event] { cogWork.eventLookup }
 
+    private static let courseOverviewAnchorID = "courseOverviewSection"
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    header
-                    filters
-                    if auth.isAdmin {
-                        goalsSection
-                    }
-                    overviewKPIs
-                    courseOverviewSection
+            ScrollViewReader { scrollProxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        header
+                        filters
+                        attentionSection(scrollProxy: scrollProxy)
+                        termStatsSection
+                        if auth.isAdmin {
+                            goalsSection
+                        }
+                        courseOverviewSection
+                            .id(Self.courseOverviewAnchorID)
 
-                    if let error = cogWork.errorMessage {
-                        Text(error)
-                            .font(SDSType.agrandir(13, weight: .bold))
-                            .foregroundColor(.sdsPink)
-                            .padding(14)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.sdsPinkSurface)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        if let error = cogWork.errorMessage {
+                            Text(error)
+                                .font(SDSType.agrandir(13, weight: .bold))
+                                .foregroundColor(.sdsPink)
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.sdsPinkSurface)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
                     }
+                    .padding(20)
+                    .frame(maxWidth: 980, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { contentWidth = proxy.size.width }
+                                .onChange(of: proxy.size.width) { _, newValue in
+                                    contentWidth = newValue
+                                }
+                        }
+                    )
                 }
-                .padding(20)
-                .frame(maxWidth: 980, alignment: .leading)
-                .frame(maxWidth: .infinity)
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear { contentWidth = proxy.size.width }
-                            .onChange(of: proxy.size.width) { _, newValue in
-                                contentWidth = newValue
-                            }
-                    }
-                )
             }
             .background(Color.sdsPageBackground.ignoresSafeArea())
             .refreshable {
@@ -187,43 +194,237 @@ struct OversiktView: View {
         }
     }
 
-    private var overviewKPIs: some View {
+    // MARK: - Att följa upp
+
+    private func attentionSection(scrollProxy: ScrollViewProxy) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Översikt")
+            Text("Att följa upp")
                 .font(SDSType.agrandir(22, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
             LazyVGrid(columns: gridColumns, spacing: 12) {
-                ForEach(overviewCards) { card in
-                    Button {
-                        navigationPath.append(card.id)
-                    } label: {
-                        WebKPICard(
-                            title: card.title,
-                            value: card.value,
-                            subtitle: card.subtitle,
-                            delta: card.delta,
-                            icon: card.icon,
-                            style: card.style,
-                            showChevron: card.isNavigable
-                        )
-                        .matchedTransitionSource(id: card.id, in: cardNamespace)
+                AttentionActionCard(
+                    value: formatted(unpaidCount),
+                    valueColor: .sdsAccent,
+                    label: "Ej betalda",
+                    message: "Kortbetalning inte slutförd. Tre dagar att betala.",
+                    linkText: "Visa bokningarna"
+                ) {
+                    navigationPath.append(.unpaid)
+                }
+                .accessibilityLabel("Ej betalda, \(formatted(unpaidCount))")
+
+                AttentionActionCard(
+                    value: formatted(reviewCount),
+                    valueColor: .sdsWarningText,
+                    label: "Att granska",
+                    message: reviewMessage,
+                    linkText: "Granska"
+                ) {
+                    navigationPath.append(.awaiting)
+                }
+                .accessibilityLabel("Att granska, \(formatted(reviewCount))")
+
+                AttentionActionCard(
+                    value: formatted(highOccupancyCourseCount),
+                    valueColor: .sdsWarningText,
+                    label: "Kurser över 90 %",
+                    message: "Fulla eller överfulla. Kolla om det behövs kö eller en extra grupp.",
+                    linkText: "Visa kurserna"
+                ) {
+                    courseFilter = .over90
+                    withAnimation {
+                        scrollProxy.scrollTo(Self.courseOverviewAnchorID, anchor: .top)
                     }
-                    .buttonStyle(KPICardButtonStyle())
-                    .disabled(!card.isNavigable)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(card.title)
-                    .accessibilityValue(card.value)
-                    .accessibilityHint(card.isNavigable ? "Öppnar listan" : "")
-                    .accessibilityAddTraits(.isButton)
+                }
+                .accessibilityLabel("Kurser över 90 procent, \(formatted(highOccupancyCourseCount))")
+
+                AttentionActionCard(
+                    value: formatted(newTodayCount),
+                    valueColor: .sdsPrimaryText,
+                    label: "Ny anmälan idag",
+                    message: "Totalt \(formatted(statisticalPeriodBookings.count)) anmälda i \(cogWork.selectedPeriod.displayName).",
+                    linkText: "Se alla anmälda"
+                ) {
+                    navigationPath.append(.registered)
+                }
+                .accessibilityLabel("Ny anmälan idag, \(formatted(newTodayCount))")
+            }
+        }
+    }
+
+    // Pendingreviewcount kombinerar redan NEW-status och deduplicerade dubbletter för vald period
+    // (se CogWorkService). Lägg inte till duplicateCount ovanpå detta — då räknas dubbletterna två gånger.
+    private var reviewCount: Int { cogWork.pendingReviewCount }
+
+    private var reviewMessage: String {
+        let duplicates = cogWork.duplicateCount
+        if duplicates > 0 { return "\(duplicates) dubbelanmälda" }
+        if reviewCount > 0 { return "\(reviewCount) väntar granskning" }
+        return "Inga ärenden att granska"
+    }
+
+    // cachedCourseRows byggs om för vald period i rebuildCourseRows(), så detta följer periodvalet.
+    private var highOccupancyCourseCount: Int {
+        cachedCourseRows.filter { $0.occupancyPercent >= 90 }.count
+    }
+
+    // MARK: - Terminen i siffror
+
+    private var termStatsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Terminen i siffror")
+                .font(SDSType.agrandir(22, weight: .bold))
+                .foregroundColor(.sdsPrimaryText)
+
+            VStack(alignment: .leading, spacing: 0) {
+                termStatsGrid
+                paymentRow
+            }
+            .background(Color.sdsSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.sdsBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    @ViewBuilder
+    private var termStatsGrid: some View {
+        if horizontalSizeClass == .regular {
+            HStack(spacing: 0) {
+                acceptedCell
+                Divider()
+                registeredCell
+                Divider()
+                studentsCell
+                Divider()
+                occupancyCell
+            }
+        } else {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    acceptedCell
+                    Divider()
+                    registeredCell
+                }
+                Divider()
+                HStack(spacing: 0) {
+                    studentsCell
+                    Divider()
+                    occupancyCell
                 }
             }
         }
     }
 
+    // Antagna räknas på statisticalPeriodBookings, dvs. vald period (precis som webben).
+    private var acceptedCell: some View {
+        Button {
+            navigationPath.append(.accepted)
+        } label: {
+            TermStatCell(
+                value: formatted(acceptedCount),
+                label: "Antagna",
+                subtitle: "\(acceptedPercent) % av anmälda"
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Antagna, \(formatted(acceptedCount)), \(acceptedPercent) procent av anmälda")
+    }
+
+    // Anmälda räknas på statisticalPeriodBookings, dvs. vald period.
+    private var registeredCell: some View {
+        Button {
+            navigationPath.append(.registered)
+        } label: {
+            TermStatCell(
+                value: formatted(statisticalPeriodBookings.count),
+                label: "Anmälda",
+                subtitle: "\(uniqueCourseCount) kurser"
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Anmälda, \(formatted(statisticalPeriodBookings.count)), \(uniqueCourseCount) kurser")
+    }
+
+    // Elever (aktiv antagning) räknas på statisticalPeriodBookings, dvs. vald period. Ingen detaljvy finns, så ingen knapp.
+    private var studentsCell: some View {
+        TermStatCell(
+            value: formatted(activeStudentCount),
+            label: "Elever",
+            subtitle: "unika med aktiv antagning"
+        )
+    }
+
+    // Medelbeläggning räknas på statisticalPeriodEvents, dvs. vald period. Ingen detaljvy finns, så ingen knapp.
+    private var occupancyCell: some View {
+        TermStatCell(
+            value: cogWork.avgOccupancyPercent.map { "\($0)%" } ?? "—",
+            label: "Medelbeläggning",
+            subtitle: "av tillgängliga platser"
+        )
+    }
+
+    @ViewBuilder
+    private var paymentRow: some View {
+        if auth.canSeeFinancials {
+            Divider()
+
+            Button {
+                navigationPath.append(.received)
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Betalning")
+                        .font(SDSType.agrandir(13, weight: .bold))
+                        .foregroundColor(.sdsSecondaryText)
+
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(formattedCurrency(totalReceived)) kr mottaget")
+                            .font(SDSType.agrandir(20, weight: .bold))
+                            .foregroundColor(.sdsPrimaryText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+
+                        Spacer(minLength: 8)
+
+                        Text("\(formattedCurrency(remainingAmount)) kr återstår")
+                            .font(SDSType.agrandir(13, weight: .bold))
+                            .foregroundColor(.sdsSecondaryText)
+                            .lineLimit(1)
+                    }
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.sdsBorder)
+                            Capsule()
+                                .fill(Color.sdsAccent)
+                                .frame(width: proxy.size.width * CGFloat(min(max(receivedPercent, 0), 100)) / 100)
+                        }
+                    }
+                    .frame(height: 6)
+
+                    Text("\(receivedPercent) % av \(formattedCurrency(totalInvoiced)) kr aviserat")
+                        .font(SDSType.agrandir(11))
+                        .foregroundColor(.sdsSecondaryText)
+                }
+                .padding(16)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Betalning, \(formattedCurrency(totalReceived)) kronor mottaget, \(formattedCurrency(remainingAmount)) kronor återstår")
+        }
+    }
+
+    // Vad som fortfarande ska faktureras in av det som redan är aviserat, för vald period.
+    private var remainingAmount: Double {
+        max(totalInvoiced - totalReceived, 0)
+    }
+
+    // Mål har en egen period (goal.eventBlockId/eventKey) och ska INTE påverkas av cogWork.selectedPeriod.
     private var goalsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
                 Text("Mål")
                     .font(SDSType.agrandir(22, weight: .bold))
                     .foregroundColor(.sdsPrimaryText)
@@ -240,9 +441,18 @@ struct OversiktView: View {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 14, weight: .bold))
                     }
-                    .foregroundColor(.sdsDarkModeGreen)
+                    .foregroundColor(.sdsAccent)
                     .accessibilityLabel("Uppdatera mål")
                 }
+
+                Button {
+                    goalEditorMode = .create
+                } label: {
+                    Label("Nytt mål", systemImage: "plus")
+                        .font(SDSType.agrandir(13, weight: .bold))
+                }
+                .foregroundColor(.sdsAccent)
+                .accessibilityLabel("Skapa nytt mål")
             }
 
             if let errorMessage = goals.errorMessage {
@@ -253,10 +463,20 @@ struct OversiktView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.sdsPinkAdaptiveSurface)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
-            } else {
-                GeometryReader { proxy in
-                    let cardWidth = max(260, proxy.size.width * 0.86)
-
+            } else if !activeGoals.isEmpty {
+                if horizontalSizeClass == .regular {
+                    LazyVGrid(columns: goalColumns, spacing: 12) {
+                        ForEach(activeGoals) { goal in
+                            Button {
+                                goalEditorMode = .edit(goal)
+                            } label: {
+                                GoalProgressCard(goal: goal, currentValue: currentValue(for: goal))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Ändra mål \(goal.title)")
+                        }
+                    }
+                } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 12) {
                             ForEach(activeGoals) { goal in
@@ -267,33 +487,18 @@ struct OversiktView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Ändra mål \(goal.title)")
-                                    .frame(width: cardWidth)
-                                    .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                                        content
-                                            .scaleEffect(phase.isIdentity ? 1 : 0.96)
-                                            .opacity(phase.isIdentity ? 1 : 0.82)
-                                    }
-                            }
-
-                            Button {
-                                goalEditorMode = .create
-                            } label: {
-                                AddGoalCard()
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Skapa nytt mål")
-                            .frame(width: cardWidth)
-                            .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                                content
-                                    .scaleEffect(phase.isIdentity ? 1 : 0.96)
-                                    .opacity(phase.isIdentity ? 1 : 0.82)
+                                .containerRelativeFrame(.horizontal) { length, _ in max(260, length * 0.86) }
+                                .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                                    content
+                                        .scaleEffect(phase.isIdentity ? 1 : 0.96)
+                                        .opacity(phase.isIdentity ? 1 : 0.82)
+                                }
                             }
                         }
                         .scrollTargetLayout()
                     }
                     .scrollTargetBehavior(.viewAligned)
                 }
-                .frame(height: 274)
             }
         }
         .padding(.bottom, 20)
@@ -353,6 +558,7 @@ struct OversiktView: View {
             }
 
             courseSearchField
+            courseFilterChips
 
             let allRows = cachedCourseRows
             let filtered = filteredRows(from: allRows)
@@ -429,8 +635,7 @@ struct OversiktView: View {
     
 
     private var goalColumns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 4 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+        Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
     }
 
     private var greeting: String {
@@ -745,11 +950,33 @@ struct OversiktView: View {
 
     private func filteredRows(from rows: [CourseOverviewData]) -> [CourseOverviewData] {
         let query = courseSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return rows }
-        return rows.filter { row in
-            row.name.localizedCaseInsensitiveContains(query)
-                || row.meta.localizedCaseInsensitiveContains(query)
-                || row.status.title.localizedCaseInsensitiveContains(query)
+        return rows
+            .filter { courseFilter.matches($0) }
+            .filter { row in
+                guard !query.isEmpty else { return true }
+                return row.name.localizedCaseInsensitiveContains(query)
+                    || row.meta.localizedCaseInsensitiveContains(query)
+                    || row.status.title.localizedCaseInsensitiveContains(query)
+            }
+    }
+
+    private func courseFilterCount(_ filter: CourseRowFilter) -> Int {
+        cachedCourseRows.filter(filter.matches).count
+    }
+
+    private var courseFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(CourseRowFilter.allCases) { filter in
+                    SDSPill(
+                        title: filter.title(count: courseFilterCount(filter)),
+                        isSelected: courseFilter == filter
+                    ) {
+                        courseFilter = filter
+                    }
+                    .accessibilityLabel(filter.accessibilityLabel)
+                }
+            }
         }
     }
 
@@ -869,7 +1096,8 @@ private extension OversiktView {
             overdue: overdue,
             paid: paid,
             participants: participants,
-            status: status
+            status: status,
+            isPublic: event?.registration?.showing ?? true
         )
     }
 
@@ -1118,14 +1346,6 @@ struct WebKPICard: View {
     }
 }
 
-private struct KPICardButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
-    }
-}
-
 private enum GoalEditorMode: Identifiable {
     case create
     case edit(Goal)
@@ -1146,38 +1366,6 @@ private enum GoalEditorMode: Identifiable {
 
     var navigationTitle: String {
         goal == nil ? "Nytt mål" : "Ändra mål"
-    }
-}
-
-private struct AddGoalCard: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "plus")
-                .font(.system(size: 34, weight: .bold))
-                .foregroundColor(.sdsAccent)
-                .frame(width: 72, height: 72)
-                .background(Color.sdsAccentSurface)
-                .clipShape(Circle())
-
-            VStack(spacing: 5) {
-                Text("Nytt mål")
-                    .font(SDSType.agrandir(22, weight: .bold))
-                    .foregroundColor(.sdsPrimaryText)
-
-                Text("Skapa ett nytt mål för översikten")
-                    .font(SDSType.agrandir(13))
-                    .foregroundColor(.sdsSecondaryText)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 202)
-        .padding(20)
-        .background(Color.sdsSurface)
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(Color.sdsBorder, style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22))
     }
 }
 
@@ -1377,93 +1565,172 @@ private struct GoalProgressCard: View {
         return min(currentValue / goal.target, 1)
     }
 
+    private var isCompleted: Bool {
+        goal.target > 0 && currentValue >= goal.target
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: goal.metric.icon)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 48, height: 48)
-                    .background(Color.white.opacity(0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.sdsAccent)
+                    .frame(width: 40, height: 40)
+                    .background(Color.sdsAccentSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
 
                 Spacer(minLength: 0)
 
-                Text(deadlineText)
-                    .font(SDSType.agrandir(12, weight: .bold))
-                    .foregroundColor(.white.opacity(0.82))
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 7)
-                    .background(Color.white.opacity(0.16))
-                    .clipShape(Capsule())
-                    .lineLimit(1)
+                if isCompleted {
+                    SDSBadge(text: "Uppnått ✓", color: .sdsLightGreenSurface, textColor: .sdsDarkGreen)
+                } else {
+                    Text(deadlineText)
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(.sdsSecondaryText)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(Color.sdsSubtleSurface)
+                        .clipShape(Capsule())
+                        .lineLimit(1)
+                }
             }
 
             Text(goal.title)
-                .font(SDSType.agrandir(24, weight: .bold))
-                .foregroundColor(.white)
+                .font(SDSType.agrandir(20, weight: .bold))
+                .foregroundColor(.sdsPrimaryText)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let description = goal.description, !description.isEmpty {
                 Text(description)
                     .font(SDSType.agrandir(13))
-                    .foregroundColor(.white.opacity(0.78))
+                    .foregroundColor(.sdsSecondaryText)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Spacer(minLength: 0)
-
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.white.opacity(0.2))
+                            .fill(Color.sdsBorder)
 
                         Capsule()
-                            .fill(Color.white)
+                            .fill(Color.sdsAccent)
                             .frame(width: proxy.size.width * progress)
                     }
                 }
-                .frame(height: 9)
+                .frame(height: 8)
 
                 HStack(alignment: .firstTextBaseline) {
                     Text(goal.metric.formatted(currentValue))
-                        .font(SDSType.agrandir(18, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(SDSType.agrandir(16, weight: .bold))
+                        .foregroundColor(.sdsPrimaryText)
                     Spacer(minLength: 6)
                     Text("av \(goal.metric.formatted(goal.target))")
-                        .font(SDSType.agrandir(13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.78))
+                        .font(SDSType.agrandir(12, weight: .bold))
+                        .foregroundColor(.sdsSecondaryText)
                         .lineLimit(1)
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 202, alignment: .topLeading)
-        .padding(20)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.sdsAccent,
-                    Color.sdsAccentPressed
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(18)
+        .background(Color.sdsSurface)
         .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.sdsBorder, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .shadow(color: Color.sdsAccent.opacity(0.24), radius: 16, x: 0, y: 10)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
     private var deadlineText: String {
         let parts = goal.deadline.split(separator: "-")
         guard parts.count == 3 else { return goal.deadline }
         return "\(parts[2])/\(parts[1])"
+    }
+}
+
+private struct AttentionActionCard: View {
+    let value: String
+    let valueColor: Color
+    let label: String
+    let message: String
+    let linkText: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(value)
+                        .font(SDSType.agrandir(36, weight: .bold))
+                        .foregroundColor(valueColor)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    Text(label)
+                        .font(SDSType.agrandir(14, weight: .bold))
+                        .foregroundColor(.sdsPrimaryText)
+                        .lineLimit(2)
+                }
+
+                Text(message)
+                    .font(SDSType.agrandir(12))
+                    .foregroundColor(.sdsSecondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3)
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 4) {
+                    Text(linkText)
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .font(SDSType.agrandir(13, weight: .bold))
+                .foregroundColor(.sdsAccent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(Color.sdsSurface)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.sdsBorder, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct TermStatCell: View {
+    let value: String
+    let label: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(SDSType.agrandir(26, weight: .bold))
+                .foregroundColor(.sdsPrimaryText)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(label)
+                .font(SDSType.agrandir(13, weight: .bold))
+                .foregroundColor(.sdsPrimaryText)
+
+            Text(subtitle)
+                .font(SDSType.agrandir(11))
+                .foregroundColor(.sdsSecondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
     }
 }
 
@@ -1734,6 +2001,42 @@ private struct CourseDetailSheet: View {
     }
 }
 
+private enum CourseRowFilter: CaseIterable, Identifiable {
+    case all, over90, overfull, available, notPublic
+
+    var id: Self { self }
+
+    func title(count: Int) -> String {
+        switch self {
+        case .all: return "Alla"
+        case .over90: return "Över 90 % \(count)"
+        case .overfull: return "Överfulla \(count)"
+        case .available: return "Lediga platser \(count)"
+        case .notPublic: return "Ej publika \(count)"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .all: return "Visa alla kurser"
+        case .over90: return "Visa kurser med beläggning över 90 procent"
+        case .overfull: return "Visa överfulla kurser"
+        case .available: return "Visa kurser med lediga platser"
+        case .notPublic: return "Visa kurser som inte är publika"
+        }
+    }
+
+    func matches(_ row: CourseOverviewData) -> Bool {
+        switch self {
+        case .all: return true
+        case .over90: return row.occupancyPercent >= 90
+        case .overfull: return row.occupancyPercent > 100
+        case .available: return row.capacity != nil && row.occupancyPercent < 100
+        case .notPublic: return !row.isPublic
+        }
+    }
+}
+
 private enum CourseOverviewSort: String, CaseIterable, Identifiable {
     case attention
     case registered
@@ -1766,6 +2069,7 @@ private struct CourseOverviewData: Identifiable {
     let paid: Int
     let participants: [CourseParticipantData]
     let status: CourseOverviewStatus
+    let isPublic: Bool
 
     var acceptedCapacityText: String {
         guard let capacity, capacity > 0 else { return "\(accepted)/—" }
