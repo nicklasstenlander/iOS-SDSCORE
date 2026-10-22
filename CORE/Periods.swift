@@ -26,21 +26,27 @@ enum Periods {
     nonisolated static let all = Period(displayName: "Alla terminer", eventBlockId: nil, codePrefix: nil)
     nonisolated static let spring2026 = Period(displayName: "Vårterminen 2026", eventBlockId: "18402", codePrefix: "VT26")
     nonisolated static let fall2026 = Period(displayName: "Höstterminen 2026", eventBlockId: "19459", codePrefix: "HT26")
-    // TODO: eventBlockId för HT 2025.
-    nonisolated static let fall2025 = Period(displayName: "HT 2025", eventBlockId: nil, codePrefix: "HT25")
-    nonisolated static let available = [all, fall2026, spring2026, fall2025]
+    nonisolated static let fall2025 = Period(displayName: "Höstterminen 2025", eventBlockId: "17665", codePrefix: "HT25")
+    nonisolated static let spring2027 = Period(displayName: "Vårterminen 2027", eventBlockId: "20430", codePrefix: "VT27")
+    nonisolated static let available = [all, spring2027, fall2026, spring2026, fall2025]
 
     nonisolated static let eventBlockIdsByCode: [String: String] = [
+        "HT25": "17665",
         "VT26": "18402",
-        "HT26": "19459"
+        "HT26": "19459",
+        "VT27": "20430"
     ]
 
-    nonisolated static func defaultPeriod(date: Date = Date()) -> Period {
+    nonisolated static func defaultPeriod(date: Date = Date(), in periods: [Period] = available) -> Period {
+        let code = defaultPeriodCode(date: date)
+        return periods.first { $0.codePrefix == code } ?? all
+    }
+
+    private nonisolated static func defaultPeriodCode(date: Date) -> String {
         let year = Calendar.current.component(.year, from: date) % 100
         let month = Calendar.current.component(.month, from: date)
         let term = month < 7 ? "VT" : "HT"
-        let code = String(format: "%@%02d", term, year)
-        return available.first { $0.codePrefix == code } ?? all
+        return String(format: "%@%02d", term, year)
     }
 
     nonisolated static func matches(_ event: Event, period: Period) -> Bool {
@@ -60,12 +66,16 @@ enum Periods {
         ])
     }
 
-    nonisolated static func matches(_ booking: Booking, period: Period) -> Bool {
+    /// Matchar en bokning mot en period via `eventBlockIdLookup` (kurs-id/-nyckel -> termins eventBlockId),
+    /// uppslagen från den fullständiga eventlistan (type=all). Bokningens egen `event.grouping.eventBlock`
+    /// skickas aldrig av CogWork i /bookings-svaret, så den går inte att lita på här. Kodprefix/datum
+    /// används bara som reservlösning när bokningens kurs saknas i eventlistan.
+    nonisolated static func matches(_ booking: Booking, period: Period, eventBlockIdLookup: [String: String]) -> Bool {
         guard period != all else { return true }
 
-        let eventBlockId = booking.event?.grouping?.eventBlock?.id?.stringValue
-        if let selectedEventBlockId = period.eventBlockId, eventBlockId == selectedEventBlockId {
-            return true
+        let bookingKeys = [booking.event?.id.map(String.init), booking.event?.key].compactMap { $0 }
+        if let resolvedEventBlockId = bookingKeys.compactMap({ eventBlockIdLookup[$0] }).first {
+            return period.eventBlockId != nil && resolvedEventBlockId == period.eventBlockId
         }
 
         guard let codePrefix = period.codePrefix else { return false }
@@ -73,6 +83,80 @@ enum Periods {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .uppercased()
         return eventCode?.hasPrefix(codePrefix.uppercased()) == true
+    }
+
+    /// Bygger en uppslagning kurs-id/-nyckel -> termins eventBlockId utifrån den fullständiga eventlistan.
+    /// Använder i första hand grouping.eventBlock.id, annars det id i additionalEventGroups som är en känd
+    /// termin (jämfört som strängar, eftersom eventBlock.id är ett tal men additionalEventGroups[].id en sträng).
+    nonisolated static func eventBlockIdLookup(events: [Event], knownEventBlockIds: Set<String>) -> [String: String] {
+        var lookup: [String: String] = [:]
+        for event in events {
+            guard let blockId = resolvedEventBlockId(for: event, knownEventBlockIds: knownEventBlockIds) else { continue }
+            lookup[String(event.id)] = blockId
+            if let key = event.key, !key.isEmpty {
+                lookup[key] = blockId
+            }
+        }
+        return lookup
+    }
+
+    private nonisolated static func resolvedEventBlockId(for event: Event, knownEventBlockIds: Set<String>) -> String? {
+        if let blockId = event.grouping?.eventBlock?.id?.stringValue {
+            return blockId
+        }
+        return event.grouping?.additionalEventGroups?.first { group in
+            guard let id = group.id?.stringValue else { return false }
+            return knownEventBlockIds.contains(id)
+        }?.id?.stringValue
+    }
+
+    /// Slår samman den fasta terminslistan med terminer från workerns `?type=terms`. CogWork slutar lista
+    /// kurser från avslutade terminer, och workern lär sig nya terminer automatiskt — unionen säkerställer
+    /// att båda källornas terminer finns kvar. Dedupliceras på eventBlockId och codePrefix; vid krock vinner
+    /// den fasta listan.
+    nonisolated static func mergedPeriods(
+        fixed: [Period],
+        dynamicBlocks: [(name: String, eventBlockId: String, code: String?)]
+    ) -> [Period] {
+        var seenEventBlockIds = Set<String>()
+        var seenCodePrefixes = Set<String>()
+        var merged: [Period] = []
+
+        func add(_ period: Period) {
+            if let id = period.eventBlockId, seenEventBlockIds.contains(id) { return }
+            if let code = period.codePrefix, seenCodePrefixes.contains(code) { return }
+            if let id = period.eventBlockId { seenEventBlockIds.insert(id) }
+            if let code = period.codePrefix { seenCodePrefixes.insert(code) }
+            merged.append(period)
+        }
+
+        for period in fixed where period != all {
+            add(period)
+        }
+
+        for block in dynamicBlocks {
+            guard !block.eventBlockId.isEmpty else { continue }
+
+            let code: String
+            if let providedCode = block.code?.uppercased(), isPeriodCode(providedCode) {
+                code = providedCode
+            } else {
+                code = blockNameToCode(block.name).uppercased()
+            }
+            guard isPeriodCode(code) else { continue }
+
+            add(Period(displayName: blockNameToFullLabel(block.name), eventBlockId: block.eventBlockId, codePrefix: code))
+        }
+
+        let order = sortPeriodCodes(merged.compactMap(\.codePrefix))
+        let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        let sorted = merged.sorted { lhs, rhs in
+            guard let left = lhs.codePrefix.flatMap({ rank[$0] }),
+                  let right = rhs.codePrefix.flatMap({ rank[$0] }) else { return false }
+            return left < right
+        }
+
+        return [all] + sorted
     }
 
     nonisolated static func defaultEventBlockId(date: Date = Date()) -> String {
@@ -89,11 +173,11 @@ enum Periods {
     }
 
     nonisolated static func blockNameToCode(_ name: String) -> String {
-        if let year = firstYear(in: name, prefixes: ["Höst", "Hösten", "höst", "hösten"]) {
+        if let year = firstYear(in: name, prefixes: ["Höst", "höst"]) {
             return "HT\(String(year.suffix(2)))"
         }
 
-        if let year = firstYear(in: name, prefixes: ["Vår", "Våren", "vår", "våren"]) {
+        if let year = firstYear(in: name, prefixes: ["Vår", "vår"]) {
             return "VT\(String(year.suffix(2)))"
         }
 
@@ -101,11 +185,11 @@ enum Periods {
     }
 
     nonisolated static func blockNameToFullLabel(_ name: String) -> String {
-        if let year = firstYear(in: name, prefixes: ["Höst", "Hösten", "höst", "hösten"]) {
+        if let year = firstYear(in: name, prefixes: ["Höst", "höst"]) {
             return "Höstterminen \(year)"
         }
 
-        if let year = firstYear(in: name, prefixes: ["Vår", "Våren", "vår", "våren"]) {
+        if let year = firstYear(in: name, prefixes: ["Vår", "vår"]) {
             return "Vårterminen \(year)"
         }
 
@@ -146,8 +230,13 @@ enum Periods {
         codes.sorted { lhs, rhs in
             guard let left = parsePeriod(lhs), let right = parsePeriod(rhs) else { return lhs > rhs }
             if left.year != right.year { return left.year > right.year }
-            return left.term > right.term
+            return termRank(left.term) > termRank(right.term)
         }
+    }
+
+    // HT (höst) ligger senare på året än VT (vår), så vid "nyast först" inom samma år ska HT före VT.
+    private nonisolated static func termRank(_ term: String) -> Int {
+        term == "HT" ? 1 : 0
     }
 
     private nonisolated static func parsePeriod(_ code: String) -> (term: String, year: Int)? {
@@ -159,7 +248,7 @@ enum Periods {
 
     private nonisolated static func firstYear(in value: String, prefixes: [String]) -> String? {
         for prefix in prefixes {
-            let pattern = #"\#(prefix)\s+(\d{4})"#
+            let pattern = #"\#(prefix)(en|terminen)?\s+(\d{4})"#
             if let range = value.range(of: pattern, options: .regularExpression) {
                 let match = String(value[range])
                 return match.split(separator: " ").last.map(String.init)

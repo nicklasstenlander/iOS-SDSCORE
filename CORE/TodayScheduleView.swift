@@ -96,7 +96,7 @@ struct TodayScheduleView: View {
             HStack(spacing: 8) {
                 Text(formattedHeaderDate)
                     .font(SDSType.agrandir(18, weight: .bold))
-                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
 
                 if !isToday {
                     todayButton
@@ -120,7 +120,7 @@ struct TodayScheduleView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 36, height: 36)
                 .background(Color.sdsSurface)
-                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.sdsBorder, lineWidth: 1))
         }
@@ -133,10 +133,10 @@ struct TodayScheduleView: View {
         } label: {
             Text("Idag")
                 .font(SDSType.agrandir(13, weight: .bold))
-                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsLightGreenSurface)
+                .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsAccentSurface)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -162,8 +162,8 @@ struct TodayScheduleView: View {
                         .font(SDSType.agrandir(15, weight: .bold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsLightGreenSurface)
-                        .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                        .background(mode == .public ? Color.sdsPublicSubtleSurface : Color.sdsAccentSurface)
+                        .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -247,7 +247,7 @@ struct TodayScheduleView: View {
                 .padding(.bottom, 4)
             Text("Inga klasser idag")
                 .font(SDSType.agrandir(18, weight: .bold))
-                .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
             if mode == .public && service.errorMessage == nil {
                 Text("Välj ett annat datum eller kika in igen senare.")
                     .font(SDSType.agrandir(14))
@@ -298,7 +298,7 @@ struct ScheduleEventCard: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(timeParts.start)
                     .font(SDSType.agrandir(15, weight: .bold))
-                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                 if !timeParts.end.isEmpty {
                     Text(timeParts.end)
                         .font(SDSType.agrandir(12))
@@ -310,7 +310,7 @@ struct ScheduleEventCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(event.name)
                     .font(SDSType.agrandir(16, weight: .bold))
-                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                     .lineLimit(1)
 
                 if !teacherHallLine.isEmpty {
@@ -324,13 +324,9 @@ struct ScheduleEventCard: View {
             Spacer(minLength: 8)
 
             if mode == .admin && isOngoing {
-                SDSBadge(
-                    text: "Pågår nu",
-                    color: .sdsDarkModeGreen,
-                    textColor: Color.adaptive(light: "ffffff", dark: "1e4025")
-                )
+                SDSBadge(text: "Pågår nu", color: .sdsAccent, textColor: .white)
             } else if mode == .admin && isNext {
-                SDSBadge(text: "Nästa", color: .sdsLightGreenSurface, textColor: .sdsDarkModeGreen)
+                SDSBadge(text: "Nästa", color: .sdsAccentSurface, textColor: .sdsAccent)
             }
         }
         .padding(.horizontal, 14)
@@ -365,14 +361,14 @@ struct ScheduleEventCard: View {
 
     private var cardBackground: Color {
         if mode == .public { return .sdsPublicSubtleSurface }
-        if mode == .admin && isOngoing { return .sdsLightGreenSurface }
-        if mode == .admin && isNext    { return Color.sdsLightGreenSurface.opacity(0.62) }
+        if mode == .admin && isOngoing { return .sdsAccentSurface }
+        if mode == .admin && isNext    { return Color.sdsAccentSurface.opacity(0.62) }
         return .sdsSurface
     }
 
     private var cardBorder: Color {
-        if mode == .admin && isOngoing { return Color.sdsDarkGreen.opacity(0.25) }
-        if mode == .admin && isNext    { return .sdsLightGreen }
+        if mode == .admin && isOngoing { return Color.sdsAccent.opacity(0.35) }
+        if mode == .admin && isNext    { return Color.sdsAccent.opacity(0.2) }
         return mode == .public ? .sdsPublicBorder : .sdsBorder
     }
 }

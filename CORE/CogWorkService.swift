@@ -4,6 +4,10 @@ import Combine
 @MainActor
 final class CogWorkService: ObservableObject {
     private let baseURL = "https://sds-cogwork-proxy.nicklas-stenlander.workers.dev"
+    /// Publika, token-fria endpoints (se `loadTerms()`/`loadPublicCatalog()`) — separata från
+    /// `baseURL`-anropen som alltid kräver Supabase-JWT och därför inte fungerar för utloggade besökare.
+    private static let termsURL = URL(string: "https://sds-cogwork-proxy.nicklas-stenlander.workers.dev/terms")!
+    private static let catalogURL = URL(string: "https://sds-cogwork-proxy.nicklas-stenlander.workers.dev/public/catalog")!
 
     @Published var bookings: [Booking] = []
     @Published var events: [Event] = []
@@ -19,8 +23,21 @@ final class CogWorkService: ObservableObject {
         didSet { if oldValue != selectedPeriod { recomputeDerivedValues() } }
     }
 
+    /// Union av den fasta terminslistan (Periods.available) och terminerna workern känner till
+    /// (?type=terms). Vyer ska använda den här i stället för Periods.available direkt.
+    @Published private(set) var availablePeriods: [Period] = Periods.available
+    @Published private(set) var eventBlockIdLookup: [String: String] = [:]
+
+    private let initialDefaultPeriod = Periods.defaultPeriod()
     private var lastFetch: Date?
     private let cacheLifetime: TimeInterval = 300
+    private static let termsDefaultsKey = "cogwork.cachedTerms"
+
+    init() {
+        if let cachedTerms = Self.loadCachedTerms(), !cachedTerms.isEmpty {
+            applyTerms(cachedTerms)
+        }
+    }
 
     /// Hämtar all data om cachen är äldre än 5 min eller om data saknas. Anropa force: true för pull-to-refresh.
     func loadAllDataIfNeeded(force: Bool = false) async {
@@ -61,6 +78,8 @@ final class CogWorkService: ObservableObject {
             isLoadingEvents = false
         }
 
+        async let termsLoad: Void = loadTerms()
+
         do {
             var queryItems = [URLQueryItem(name: "type", value: "all")]
             if let eventBlockId, !eventBlockId.isEmpty {
@@ -81,6 +100,60 @@ final class CogWorkService: ObservableObject {
         } catch {
             errorMessage = "Kunde inte hämta översiktsdata. \(Self.readableErrorMessage(error))"
         }
+
+        await termsLoad
+    }
+
+    /// Hämtar terminerna workern känner till via den publika `/terms`-endpointen (inget
+    /// Supabase-JWT krävs, till skillnad från övriga anrop i den här klassen). Det gör att nya
+    /// terminer (t.ex. nästa VT/HT) dyker upp automatiskt — utan ny appversion — och fungerar
+    /// även för utloggade besökare. Om anropet misslyckas faller appen tyst tillbaka på senast
+    /// cachade listan, eller den hårdkodade i Periods om ingen cache finns.
+    private func loadTerms() async {
+        do {
+            var request = URLRequest(url: Self.termsURL)
+            request.timeoutInterval = 8
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return }
+            let decoded = try JSONDecoder().decode(TermsResponse.self, from: data)
+            guard !decoded.terms.isEmpty else { return }
+            Self.cacheTerms(decoded.terms)
+            applyTerms(decoded.terms, currentCode: decoded.currentCode)
+        } catch {
+            // Tyst fallback enligt uppdraget — availablePeriods behåller cachad/fast lista.
+        }
+    }
+
+    private func applyTerms(_ terms: [TermInfo], currentCode: String? = nil) {
+        let dynamicBlocks = terms.map { (name: $0.name, eventBlockId: $0.eventBlockId, code: $0.code) }
+        availablePeriods = Periods.mergedPeriods(fixed: Periods.available, dynamicBlocks: dynamicBlocks)
+        recomputeDerivedValues()
+        upgradeDefaultPeriodIfNeeded(currentCode: currentCode)
+    }
+
+    /// Om användaren inte redan har valt en period manuellt och den ursprungliga defaulten
+    /// (vald innan terminerna hade laddats) inte motsvarar den faktiska aktuella terminen,
+    /// byt till den. `currentCode` kommer direkt från workern och är mer tillförlitlig än att
+    /// gissa utifrån dagens datum. Ett val användaren redan gjort skrivs aldrig över.
+    private func upgradeDefaultPeriodIfNeeded(currentCode: String? = nil) {
+        guard selectedPeriod == initialDefaultPeriod else { return }
+        let resolved = currentCode
+            .flatMap { code in availablePeriods.first { $0.codePrefix == code } }
+            ?? Periods.defaultPeriod(in: availablePeriods)
+        guard resolved != selectedPeriod else { return }
+        selectedPeriod = resolved
+    }
+
+    private static func loadCachedTerms() -> [TermInfo]? {
+        guard let data = UserDefaults.standard.data(forKey: termsDefaultsKey),
+              let decoded = try? JSONDecoder().decode([TermInfo].self, from: data) else { return nil }
+        return decoded
+    }
+
+    private static func cacheTerms(_ terms: [TermInfo]) {
+        guard let data = try? JSONEncoder().encode(terms) else { return }
+        UserDefaults.standard.set(data, forKey: termsDefaultsKey)
     }
 
     func loadEvents(eventBlockId: String? = nil) async {
@@ -96,6 +169,34 @@ final class CogWorkService: ObservableObject {
             let data = try await proxyData(queryItems: queryItems)
             let decoded = try JSONDecoder().decode(AllDataResponse.self, from: data)
             events = decoded.events?.events ?? []
+            recomputeDerivedValues()
+        } catch is CancellationError {
+        } catch let urlError as URLError where urlError.code == .cancelled {
+        } catch {
+            errorMessage = "Kunde inte hämta kurser. \(Self.readableErrorMessage(error))"
+        }
+    }
+
+    /// Hämtar den publika kurskatalogen via `/catalog` (inget Supabase-JWT krävs). Används av
+    /// CourseCatalogView i publikt läge, där besökaren saknar inloggning och därför inte kan
+    /// anropa de vanliga `type=all`-rutterna (de kräver alltid en personlig token, se APIClient).
+    /// Innehåller bara kursmetadata — aldrig bokningar eller deltagardata.
+    func loadPublicCatalog() async {
+        isLoadingEvents = true
+        errorMessage = nil
+        defer { isLoadingEvents = false }
+
+        do {
+            var request = URLRequest(url: Self.catalogURL)
+            request.timeoutInterval = 8
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                errorMessage = "Kunde inte hämta kurser."
+                return
+            }
+            let decoded = try JSONDecoder().decode(PublicCatalogResponse.self, from: data)
+            events = decoded.events
             recomputeDerivedValues()
         } catch is CancellationError {
         } catch let urlError as URLError where urlError.code == .cancelled {
@@ -167,6 +268,8 @@ final class CogWorkService: ObservableObject {
 
         URLCache.shared.removeAllCachedResponses()
 
+        async let termsLoad: Void = loadTerms()
+
         do {
             try await purgeProxyCache()
             let data = try await proxyData(queryItems: [URLQueryItem(name: "type", value: "all")])
@@ -180,6 +283,8 @@ final class CogWorkService: ObservableObject {
         } catch {
             errorMessage = "Kunde inte rensa cache och hämta ny data. \(Self.readableErrorMessage(error))"
         }
+
+        await termsLoad
     }
 
     // MARK: - Cachade härledda värden (beräknas en gång vid dataändring/periodbyte)
@@ -198,7 +303,12 @@ final class CogWorkService: ObservableObject {
             for key in keys where result[key] == nil { result[key] = event }
         }
         eventLookup = lookup
-        periodBookings = bookings.filter { Periods.matches($0, period: selectedPeriod) }
+
+        let knownEventBlockIds = Set(availablePeriods.compactMap(\.eventBlockId))
+        let blockLookup = Periods.eventBlockIdLookup(events: events, knownEventBlockIds: knownEventBlockIds)
+        eventBlockIdLookup = blockLookup
+
+        periodBookings = bookings.filter { Periods.matches($0, period: selectedPeriod, eventBlockIdLookup: blockLookup) }
         statisticalPeriodBookings = periodBookings.filter {
             CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup)
         }

@@ -241,7 +241,67 @@ struct AllDataResponse: Codable {
     struct EventsWrapper: Codable {
         let events: [Event]
         let search: SearchInfo?
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            events = (try? container.decodeIfPresent([Event].self, forKey: .events)) ?? []
+            search = try? container.decodeIfPresent(SearchInfo.self, forKey: .search)
+        }
+
+        enum CodingKeys: String, CodingKey { case events, search }
     }
+}
+
+// MARK: - Terminer (publika, token-fria GET /terms)
+
+struct TermInfo: Codable {
+    let eventBlockId: String
+    let code: String?
+    let name: String
+    let label: String?
+    let isCurrent: Bool?
+    let isUpcoming: Bool?
+    let inAggregate: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case eventBlockId
+        case code
+        case name
+        case label
+        case isCurrent
+        case isUpcoming
+        case inAggregate
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        eventBlockId = container.decodeFlexibleStringIfPresent(forKey: .eventBlockId) ?? ""
+        code = container.decodeFlexibleStringIfPresent(forKey: .code)
+        name = container.decodeFlexibleStringIfPresent(forKey: .name) ?? ""
+        label = container.decodeFlexibleStringIfPresent(forKey: .label)
+        isCurrent = try? container.decodeIfPresent(Bool.self, forKey: .isCurrent)
+        isUpcoming = try? container.decodeIfPresent(Bool.self, forKey: .isUpcoming)
+        inAggregate = try? container.decodeIfPresent(Bool.self, forKey: .inAggregate)
+    }
+}
+
+struct TermsResponse: Codable {
+    let terms: [TermInfo]
+    let currentCode: String?
+    let currentEventBlockId: String?
+}
+
+// MARK: - Publik kurskatalog (token-fri GET /catalog)
+
+struct PublicCatalogResponse: Codable {
+    let events: [Event]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        events = (try? container.decodeIfPresent([Event].self, forKey: .events)) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey { case events }
 }
 
 struct Event: Codable, Identifiable {

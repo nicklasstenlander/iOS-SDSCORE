@@ -251,7 +251,7 @@ struct SDSPill: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
                 .background(isSelected ? Color.sdsAccent : Color.sdsSurface)
-                .foregroundColor(isSelected ? .white : .sdsDarkModeGreen)
+                .foregroundColor(isSelected ? .white : .sdsAccent)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule().stroke(Color.sdsBorder.opacity(isSelected ? 0 : 1), lineWidth: 1)

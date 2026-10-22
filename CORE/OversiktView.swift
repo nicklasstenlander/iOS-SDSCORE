@@ -19,7 +19,7 @@ struct OversiktView: View {
     @State private var goalEditorMode: GoalEditorMode?
     @State private var rebuildTask: Task<Void, Never>?
 
-    private var periods: [Period] { Periods.available }
+    private var periods: [Period] { cogWork.availablePeriods }
 
     private var periodBookings: [Booking] { cogWork.periodBookings }
     private var statisticalPeriodBookings: [Booking] { cogWork.statisticalPeriodBookings }
@@ -34,8 +34,8 @@ struct OversiktView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         header
                         filters
-                        attentionSection(scrollProxy: scrollProxy)
                         termStatsSection
+                        attentionSection(scrollProxy: scrollProxy)
                         if auth.isAdmin {
                             goalsSection
                         }
@@ -127,12 +127,13 @@ struct OversiktView: View {
         let bookings = cogWork.bookings
         let events = cogWork.events
         let period = cogWork.selectedPeriod
+        let eventBlockIdLookup = cogWork.eventBlockIdLookup
 
         try? await Task.sleep(for: .milliseconds(100))
         guard !Task.isCancelled else { return }
 
         let detachedTask = Task.detached(priority: .userInitiated) {
-            OversiktView.buildCourseRowsBackground(bookings: bookings, events: events, period: period)
+            OversiktView.buildCourseRowsBackground(bookings: bookings, events: events, period: period, eventBlockIdLookup: eventBlockIdLookup)
         }
 
         // Om föräldratasken avbryts (tab-byte, periodbyte, app stängs): avbryt detached-tasken
@@ -277,16 +278,15 @@ struct OversiktView: View {
                 .font(SDSType.agrandir(22, weight: .bold))
                 .foregroundColor(.sdsPrimaryText)
 
-            VStack(alignment: .leading, spacing: 0) {
-                termStatsGrid
-                paymentRow
-            }
-            .background(Color.sdsSurface)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.sdsBorder, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            termStatsGrid
+                .background(Color.sdsSurface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.sdsBorder, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+            paymentRow
         }
     }
 
@@ -367,51 +367,70 @@ struct OversiktView: View {
         )
     }
 
+    // Inverterat (alltid mörkt, oavsett systemtema) kort — ett medvetet brand-ögonblick, som på webben.
+    private static let paymentCardBackground = Color(hex: "13162b")
+
     @ViewBuilder
     private var paymentRow: some View {
         if auth.canSeeFinancials {
-            Divider()
-
             Button {
                 navigationPath.append(.received)
             } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Betalning")
-                        .font(SDSType.agrandir(13, weight: .bold))
-                        .foregroundColor(.sdsSecondaryText)
-
+                VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("\(formattedCurrency(totalReceived)) kr mottaget")
-                            .font(SDSType.agrandir(20, weight: .bold))
-                            .foregroundColor(.sdsPrimaryText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                        Text("Betalning")
+                            .font(SDSType.agrandir(14))
+                            .foregroundColor(.white.opacity(0.6))
 
                         Spacer(minLength: 8)
 
                         Text("\(formattedCurrency(remainingAmount)) kr återstår")
                             .font(SDSType.agrandir(13, weight: .bold))
-                            .foregroundColor(.sdsSecondaryText)
+                            .foregroundColor(.white.opacity(0.6))
                             .lineLimit(1)
                     }
 
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(formattedCurrency(totalReceived))
+                            .font(SDSType.agrandir(34, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+
+                        Text("kr mottaget")
+                            .font(SDSType.agrandir(16))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+
                     GeometryReader { proxy in
+                        let fraction = CGFloat(min(max(receivedPercent, 0), 100)) / 100
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color.sdsBorder)
+                            Capsule()
+                                .fill(Color.white.opacity(0.14))
+
                             Capsule()
                                 .fill(Color.sdsAccent)
-                                .frame(width: proxy.size.width * CGFloat(min(max(receivedPercent, 0), 100)) / 100)
+                                .frame(width: proxy.size.width * fraction)
+
+                            Circle()
+                                .fill(Self.paymentCardBackground)
+                                .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                                .frame(width: 14, height: 14)
+                                .offset(x: proxy.size.width * fraction - 7)
                         }
                     }
-                    .frame(height: 6)
+                    .frame(height: 8)
 
-                    Text("\(receivedPercent) % av \(formattedCurrency(totalInvoiced)) kr aviserat")
-                        .font(SDSType.agrandir(11))
-                        .foregroundColor(.sdsSecondaryText)
+                    Text("\(receivedPercent)% av \(formattedCurrency(totalInvoiced)) kr aviserat")
+                        .font(SDSType.agrandir(13))
+                        .foregroundColor(.white.opacity(0.6))
                 }
-                .padding(16)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .background(Self.paymentCardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 22))
             .accessibilityLabel("Betalning, \(formattedCurrency(totalReceived)) kronor mottaget, \(formattedCurrency(remainingAmount)) kronor återstår")
         }
     }
@@ -495,6 +514,7 @@ struct OversiktView: View {
         .sheet(item: $goalEditorMode) { mode in
             GoalEditorSheet(mode: mode)
                 .environmentObject(goals)
+                .environmentObject(cogWork)
         }
     }
 
@@ -932,12 +952,16 @@ struct OversiktView: View {
         let all = cogWork.bookings.filter { CourseMetricsEngine.isStatisticalBooking($0, eventLookup: lookup) }
 
         if let eventBlockId = goal.eventBlockId, !eventBlockId.isEmpty {
+            let blockLookup = cogWork.eventBlockIdLookup
             // Hitta perioden i den kända listan för att få kodprefix-fallback via Periods.matches
-            if let period = Periods.available.first(where: { $0.eventBlockId == eventBlockId }) {
-                return all.filter { Periods.matches($0, period: period) }
+            if let period = cogWork.availablePeriods.first(where: { $0.eventBlockId == eventBlockId }) {
+                return all.filter { Periods.matches($0, period: period, eventBlockIdLookup: blockLookup) }
             }
-            // Okänt block-id: matcha direkt
-            return all.filter { $0.event?.grouping?.eventBlock?.id?.stringValue == eventBlockId }
+            // Okänt block-id: matcha direkt via samma kurs-uppslagning som period-matchningen.
+            return all.filter { booking in
+                let keys = [booking.event?.id.map(String.init), booking.event?.key].compactMap { $0 }
+                return keys.contains { blockLookup[$0] == eventBlockId }
+            }
         }
         if let eventKey = goal.eventKey, !eventKey.isEmpty {
             return all.filter {
@@ -1009,7 +1033,8 @@ private extension OversiktView {
     nonisolated static func buildCourseRowsBackground(
         bookings: [Booking],
         events: [Event],
-        period: Period
+        period: Period,
+        eventBlockIdLookup: [String: String]
     ) -> [CourseOverviewData] {
         let lookup: [String: Event] = events.reduce(into: [:]) { result, event in
             var keys = [String(event.id)]
@@ -1024,7 +1049,7 @@ private extension OversiktView {
         )
         let periodEvents = events
             .filter { Periods.matches($0, period: period) && CourseMetricsEngine.isStatisticalEvent($0) }
-        let periodBookings = bookings.filter { Periods.matches($0, period: period) }
+        let periodBookings = bookings.filter { Periods.matches($0, period: period, eventBlockIdLookup: eventBlockIdLookup) }
         let grouped = Dictionary(grouping: periodBookings) { booking in
             courseKey(for: booking, lookup: lookup)
         }
@@ -1377,9 +1402,12 @@ private enum GoalEditorMode: Identifiable {
 
 private struct GoalEditorSheet: View {
     @EnvironmentObject var goals: GoalsService
+    @EnvironmentObject var cogWork: CogWorkService
     @Environment(\.dismiss) private var dismiss
 
     let mode: GoalEditorMode
+
+    private var availablePeriods: [Period] { cogWork.availablePeriods }
 
     @State private var title: String
     @State private var description: String
@@ -1406,7 +1434,7 @@ private struct GoalEditorSheet: View {
         _description = State(initialValue: goal?.description ?? "")
         _metric = State(initialValue: goal?.metric ?? .bookingsCount)
         _target = State(initialValue: goal.map { Self.targetString($0.target) } ?? "")
-        _selectedPeriod = State(initialValue: Self.period(for: goal))
+        _selectedPeriod = State(initialValue: Self.period(for: goal, availablePeriods: Periods.available))
         _eventKey = State(initialValue: goal?.eventKey ?? "")
         _deadline = State(initialValue: Self.date(from: goal?.deadline) ?? Date())
     }
@@ -1438,7 +1466,7 @@ private struct GoalEditorSheet: View {
 
                 Section {
                     Picker("Period", selection: $selectedPeriod) {
-                        ForEach(Periods.available) { period in
+                        ForEach(availablePeriods) { period in
                             Text(period.displayName).tag(period)
                         }
                     }
@@ -1487,6 +1515,9 @@ private struct GoalEditorSheet: View {
                     .disabled(isSaving)
                 }
             }
+        }
+        .onAppear {
+            selectedPeriod = Self.period(for: mode.goal, availablePeriods: availablePeriods)
         }
     }
 
@@ -1541,10 +1572,10 @@ private struct GoalEditorSheet: View {
         }
     }
 
-    private static func period(for goal: Goal?) -> Period {
-        guard let goal else { return Periods.defaultPeriod() }
+    private static func period(for goal: Goal?, availablePeriods: [Period]) -> Period {
+        guard let goal else { return Periods.defaultPeriod(in: availablePeriods) }
         if let eventBlockId = goal.eventBlockId, !eventBlockId.isEmpty {
-            return Periods.available.first { $0.eventBlockId == eventBlockId } ?? Periods.all
+            return availablePeriods.first { $0.eventBlockId == eventBlockId } ?? Periods.all
         }
         return Periods.all
     }

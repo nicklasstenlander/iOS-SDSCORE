@@ -7,7 +7,7 @@ struct AnmalningarView: View {
     @State private var paymentFilter = PaymentFilter.all
     @State private var selectedBooking: Booking?
 
-    private var periods: [Period] { Periods.available }
+    private var periods: [Period] { cogWork.availablePeriods }
 
     private var filteredBookings: [Booking] {
         periodBookings.filter { booking in

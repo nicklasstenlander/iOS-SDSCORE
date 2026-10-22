@@ -116,7 +116,11 @@ struct CourseCatalogView: View {
         }
         .task {
             if cogWork.events.isEmpty {
-                await cogWork.loadAllData()
+                if mode == .public {
+                    await cogWork.loadPublicCatalog()
+                } else {
+                    await cogWork.loadAllData()
+                }
             }
             selectInitialEventIfNeeded()
         }
@@ -211,7 +215,7 @@ struct CourseCatalogView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(mode == .public ? .sdsTeal : .sdsDarkModeGreen)
+                    .foregroundColor(mode == .public ? .sdsTeal : .sdsAccent)
                 TextField("Sök kurs, kategori eller lärare...", text: $searchText)
                     .font(SDSType.agrandir(14))
                     .textInputAutocapitalization(.never)
@@ -265,7 +269,7 @@ struct CourseCatalogView: View {
     }
 
     private var filterAccentColor: Color {
-        mode == .public ? .sdsTeal : .sdsDarkModeGreen
+        mode == .public ? .sdsTeal : .sdsAccent
     }
 
     private func selectInitialEventIfNeeded() {
@@ -293,7 +297,7 @@ private struct CatalogCourseRow: View {
                         .font(SDSType.agrandir(15, weight: .bold))
                         .foregroundColor(.sdsPrimaryText)
                     if let age = event.ageRange {
-                        CatalogAgePill(text: age)
+                        CatalogAgePill(text: age, mode: mode)
                     }
                 }
                 HStack(spacing: 8) {
@@ -346,14 +350,15 @@ private func capacityText(accepted: Int, max: Int) -> String {
 
 private struct CatalogAgePill: View {
     let text: String
+    let mode: CourseCatalogView.Mode
 
     var body: some View {
         Text(text)
             .font(SDSType.agrandir(11, weight: .bold))
-            .foregroundColor(.sdsDarkGreen)
+            .foregroundColor(mode == .public ? .sdsDarkGreen : .sdsAccent)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Color.sdsLightGreen)
+            .background(mode == .public ? Color.sdsLightGreen : Color.sdsAccentSurface)
             .clipShape(Capsule())
     }
 }
@@ -372,7 +377,7 @@ struct CourseCatalogDetailSheet: View {
     }
 
     private var accentColor: Color {
-        mode == .public ? .sdsTeal : .sdsDarkModeGreen
+        mode == .public ? .sdsTeal : .sdsAccent
     }
 
     var body: some View {
@@ -455,14 +460,14 @@ struct CourseCatalogDetailSheet: View {
             HStack(spacing: 8) {
                 Text(event.categoryName)
                     .font(SDSType.agrandir(12, weight: .bold))
-                    .foregroundColor(.sdsDarkGreen)
+                    .foregroundColor(mode == .public ? .sdsDarkGreen : .sdsAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.sdsLightGreen)
+                    .background(mode == .public ? Color.sdsLightGreen : Color.sdsAccentSurface)
                     .clipShape(Capsule())
 
                 if let age = event.ageRange {
-                    CatalogAgePill(text: age)
+                    CatalogAgePill(text: age, mode: mode)
                 }
             }
 
@@ -475,23 +480,23 @@ struct CourseCatalogDetailSheet: View {
     private var infoSection: some View {
         VStack(spacing: 0) {
             if let time = event.schedule?.dayAndTimeInfo {
-                CatalogDetailRow(icon: "clock", label: "Tid", value: time)
+                CatalogDetailRow(icon: "clock", label: "Tid", value: time, mode: mode)
                 Divider().padding(.leading, 52)
             }
             if let place = event.place, !place.isEmpty {
-                CatalogDetailRow(icon: "mappin.circle", label: "Sal", value: place)
+                CatalogDetailRow(icon: "mappin.circle", label: "Sal", value: place, mode: mode)
                 Divider().padding(.leading, 52)
             }
             if let instructor = event.instructorsName, !instructor.isEmpty {
-                CatalogDetailRow(icon: "person", label: "Lärare", value: instructor)
+                CatalogDetailRow(icon: "person", label: "Lärare", value: instructor, mode: mode)
                 Divider().padding(.leading, 52)
             }
             if let price = event.priceFormatted {
-                CatalogDetailRow(icon: "banknote", label: "Pris", value: price)
+                CatalogDetailRow(icon: "banknote", label: "Pris", value: price, mode: mode)
                 Divider().padding(.leading, 52)
             }
             if let age = event.ageRange {
-                CatalogDetailRow(icon: "figure.child", label: "Ålder", value: age)
+                CatalogDetailRow(icon: "figure.child", label: "Ålder", value: age, mode: mode)
                 Divider().padding(.leading, 52)
             }
             if mode == .admin {
@@ -507,9 +512,9 @@ struct CourseCatalogDetailSheet: View {
     private var occupancyRow: some View {
         if let accepted = event.statistics?.accepted,
            let max = event.requirements?.maxParticipants {
-            CatalogDetailRow(icon: "person.2", label: "Beläggning", value: "\(accepted) av \(max) platser")
+            CatalogDetailRow(icon: "person.2", label: "Beläggning", value: "\(accepted) av \(max) platser", mode: mode)
         } else if let accepted = event.statistics?.accepted {
-            CatalogDetailRow(icon: "person.2", label: "Anmälda", value: "\(accepted) deltagare")
+            CatalogDetailRow(icon: "person.2", label: "Anmälda", value: "\(accepted) deltagare", mode: mode)
         }
     }
 
@@ -539,12 +544,13 @@ private struct CatalogDetailRow: View {
     let icon: String
     let label: String
     let value: String
+    let mode: CourseCatalogView.Mode
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.sdsDarkModeGreen)
+                .foregroundColor(mode == .public ? .sdsDarkModeGreen : .sdsAccent)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
