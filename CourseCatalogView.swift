@@ -43,6 +43,7 @@ struct CourseCatalogView: View {
     @State private var searchText = ""
     @State private var selectedAgeGroup = AgeGroupFilter.all
     @State private var selectedEvent: Event?
+    @State private var selectedPublicTermID: String?
     let mode: Mode
     let initialSelectedEventID: Int?
 
@@ -51,8 +52,26 @@ struct CourseCatalogView: View {
         self.initialSelectedEventID = initialSelectedEventID
     }
 
+    // Publikt läge: CogWork styr vad som visas (registration.showing), så katalogen innehåller bara
+    // terminer som går att se/boka – t.ex. både HT26 och VT27 när VT27-anmälan öppnat. Admin följer selectedPeriod.
     private var catalogEvents: [Event] {
-        cogWork.events.filter { Periods.matches($0, period: cogWork.selectedPeriod) }
+        guard mode == .public else {
+            return cogWork.events.filter { Periods.matches($0, period: cogWork.selectedPeriod) }
+        }
+        guard let termID = activePublicTermID else { return cogWork.events }
+        return cogWork.events.filter { $0.grouping?.eventBlock?.id?.stringValue == termID }
+    }
+
+    private var publicTerms: [(id: String, name: String)] {
+        Periods.publicTerms(events: cogWork.events)
+    }
+
+    /// Valt terminsval, annars den senaste terminen med öppen anmälan (nästa termin så fort den öppnar).
+    private var activePublicTermID: String? {
+        if let selected = selectedPublicTermID, publicTerms.contains(where: { $0.id == selected }) {
+            return selected
+        }
+        return Periods.defaultPublicTermID(events: cogWork.events)
     }
 
     private var filteredEvents: [Event] {
@@ -237,6 +256,19 @@ struct CourseCatalogView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 16)
             .padding(.top, 12)
+
+            if mode == .public && publicTerms.count > 1 {
+                Picker("Termin", selection: Binding(
+                    get: { activePublicTermID ?? "" },
+                    set: { selectedPublicTermID = $0 }
+                )) {
+                    ForEach(publicTerms, id: \.id) { term in
+                        Text(term.name).tag(term.id)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {

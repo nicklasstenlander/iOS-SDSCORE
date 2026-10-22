@@ -116,3 +116,51 @@ struct PeriodsBookingMatchTests {
         #expect(Periods.matches(booking, period: Periods.fall2026, eventBlockIdLookup: lookup) == false)
     }
 }
+
+@Suite("Periods: publik katalog visar nästa termin när anmälan öppnar")
+struct PeriodsPublicCatalogTests {
+    private func event(_ id: Int, block: Int, name: String, start: String, open: Bool) throws -> Event {
+        let json = """
+        {"id": \(id), "registration": {"open": \(open), "showing": true},
+         "schedule": {"start": {"date": "\(start)"}},
+         "grouping": {"eventBlock": {"id": \(block), "name": "\(name)"}}}
+        """
+        return try JSONDecoder().decode(Event.self, from: Data(json.utf8))
+    }
+
+    @Test("bara innevarande termin: inget val, den terminen visas")
+    func onlyCurrentTerm() throws {
+        let events = [try event(1, block: 19459, name: "Höstterminen 2026", start: "2026-08-31", open: true)]
+        #expect(Periods.publicTerms(events: events).map(\.id) == ["19459"])
+        #expect(Periods.defaultPublicTermID(events: events) == "19459")
+    }
+
+    @Test("VT27 öppen för anmälan (16 nov): VT27 är förvald, HT26 finns kvar som val, äldst först")
+    func upcomingTermOpenIsDefault() throws {
+        let events = [
+            try event(1, block: 20430, name: "Vårterminen 2027", start: "2027-01-11", open: true),
+            try event(2, block: 19459, name: "Höstterminen 2026", start: "2026-08-31", open: false),
+            try event(3, block: 19459, name: "Höstterminen 2026", start: "2026-09-01", open: true),
+        ]
+        #expect(Periods.publicTerms(events: events).map(\.name) == ["Höstterminen 2026", "Vårterminen 2027"])
+        #expect(Periods.defaultPublicTermID(events: events) == "20430")
+    }
+
+    @Test("VT27 synlig men anmälan stängd: innevarande termin med öppen anmälan förvald")
+    func upcomingTermNotYetOpen() throws {
+        let events = [
+            try event(1, block: 20430, name: "Vårterminen 2027", start: "2027-01-11", open: false),
+            try event(2, block: 19459, name: "Höstterminen 2026", start: "2026-08-31", open: true),
+        ]
+        #expect(Periods.defaultPublicTermID(events: events) == "19459")
+    }
+
+    @Test("ingen öppen anmälan alls: senaste terminen")
+    func noOpenRegistration() throws {
+        let events = [
+            try event(1, block: 20430, name: "Vårterminen 2027", start: "2027-01-11", open: false),
+            try event(2, block: 19459, name: "Höstterminen 2026", start: "2026-08-31", open: false),
+        ]
+        #expect(Periods.defaultPublicTermID(events: events) == "20430")
+    }
+}

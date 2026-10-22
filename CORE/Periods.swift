@@ -66,6 +66,29 @@ enum Periods {
         ])
     }
 
+    /// Terminer i den publika katalogen (eventBlock-id och namn), äldst först efter tidigaste kursstart.
+    nonisolated static func publicTerms(events: [Event]) -> [(id: String, name: String)] {
+        var terms: [String: (name: String, firstStart: String)] = [:]
+        for event in events {
+            guard let block = event.grouping?.eventBlock, let id = block.id?.stringValue else { continue }
+            let start = event.schedule?.start?.date ?? "9999"
+            let existing = terms[id]
+            terms[id] = (name: block.name ?? existing?.name ?? id, firstStart: min(existing?.firstStart ?? start, start))
+        }
+        return terms
+            .sorted { $0.value.firstStart < $1.value.firstStart }
+            .map { (id: $0.key, name: $0.value.name) }
+    }
+
+    /// Senaste terminen med öppen anmälan, annars den senaste terminen. Gör att nästa termin visas
+    /// direkt när CogWork öppnar anmälan, utan att vänta på att terminen börjar.
+    nonisolated static func defaultPublicTermID(events: [Event]) -> String? {
+        let terms = publicTerms(events: events)
+        let openIDs = Set(events.filter { $0.registration?.open == true }
+            .compactMap { $0.grouping?.eventBlock?.id?.stringValue })
+        return terms.last(where: { openIDs.contains($0.id) })?.id ?? terms.last?.id
+    }
+
     /// Matchar en bokning mot en period via `eventBlockIdLookup` (kurs-id/-nyckel -> termins eventBlockId),
     /// uppslagen från den fullständiga eventlistan (type=all). Bokningens egen `event.grouping.eventBlock`
     /// skickas aldrig av CogWork i /bookings-svaret, så den går inte att lita på här. Kodprefix/datum
