@@ -46,6 +46,9 @@ final class LoopingPlayerUIView: UIView {
             return
         }
 
+        // Muted video shouldn't silence music the visitor already has playing.
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+
         let item = AVPlayerItem(url: url)
         let queuePlayer = AVQueuePlayer()
         queuePlayer.isMuted = true
